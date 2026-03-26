@@ -16,6 +16,12 @@ export function createPeerConnection(onIceCandidate, onConnectionStateChange) {
 
     pc.oniceconnectionstatechange = () => {
         console.log('[WebRTC] ICE state:', pc.iceConnectionState);
+        // Fallback for browsers that don't reliably fire onconnectionstatechange
+        if (pc.iceConnectionState === 'connected' || pc.iceConnectionState === 'completed') {
+            onConnectionStateChange('connected');
+        } else if (pc.iceConnectionState === 'failed' || pc.iceConnectionState === 'disconnected') {
+            onConnectionStateChange('failed');
+        }
     };
 
     return pc;
