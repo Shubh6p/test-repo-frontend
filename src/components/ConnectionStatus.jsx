@@ -3,28 +3,28 @@ import { CONNECTION_STATES } from '../utils/constants';
 
 const STATUS_CONFIG = {
     [CONNECTION_STATES.IDLE]: {
-        icon: Wifi, color: 'text-gray-500', label: 'Ready'
+        icon: Wifi, color: 'text-retro-gray', label: 'READY.'
     },
     [CONNECTION_STATES.CONNECTING]: {
-        icon: Loader2, color: 'text-yellow-500', label: 'Connecting...', animate: true
+        icon: Loader2, color: 'text-retro-amber', label: 'UPLINKING...', animate: true
     },
     [CONNECTION_STATES.WAITING]: {
-        icon: Loader2, color: 'text-blue-500', label: 'Waiting for peer...', animate: true
+        icon: Loader2, color: 'text-retro-amber', label: 'AWAITING PEER...', animate: true
     },
     [CONNECTION_STATES.CONNECTED]: {
-        icon: Check, color: 'text-green-500', label: 'Connected (P2P)'
+        icon: Check, color: 'text-retro-olive', label: 'LINK ESTABLISHED.'
     },
     [CONNECTION_STATES.TRANSFERRING]: {
-        icon: Wifi, color: 'text-blue-500', label: 'Transferring...'
+        icon: Wifi, color: 'text-retro-amber animate-pulse', label: 'TRANSMITTING...'
     },
     [CONNECTION_STATES.COMPLETED]: {
-        icon: Check, color: 'text-green-500', label: 'Complete!'
+        icon: Check, color: 'text-retro-olive', label: 'SEQUENCE COMPLETE.'
     },
     [CONNECTION_STATES.ERROR]: {
-        icon: AlertCircle, color: 'text-red-500', label: 'Error'
+        icon: AlertCircle, color: 'text-red-500', label: 'CRITICAL FAILURE.'
     },
     [CONNECTION_STATES.DISCONNECTED]: {
-        icon: WifiOff, color: 'text-red-500', label: 'Disconnected'
+        icon: WifiOff, color: 'text-red-500', label: 'LINK SEVERED.'
     },
 };
 
@@ -33,8 +33,8 @@ export default function ConnectionStatus({ state }) {
     const Icon = config.icon;
 
     return (
-        <div className="flex items-center gap-2 text-sm">
-            <Icon className={`w-4 h-4 ${config.color} ${config.animate ? 'animate-spin' : ''}`} />
+        <div className="flex items-center gap-2 font-dos text-[10px] md:text-xs tracking-wider uppercase bg-retro-terminal px-3 py-2 border-2 border-retro-terminal text-white">
+            <Icon className={`w-3 h-3 md:w-4 md:h-4 ${config.color} ${config.animate ? 'animate-spin' : ''}`} />
             <span className={config.color}>{config.label}</span>
         </div>
     );

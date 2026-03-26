@@ -125,9 +125,12 @@ export default function Send() {
     ].includes(status);
 
     return (
-        <div className="space-y-6">
-            <div className="flex items-center justify-between">
-                <h1 className="text-2xl font-bold">Send a File</h1>
+        <div className="bg-retro-card shadow-brutal border border-retro-shadow/20 p-6 md:p-10 space-y-8 max-w-2xl mx-auto relative mt-4">
+            {/* Floppy slider detail */}
+            <div className="absolute top-0 left-6 w-16 h-8 bg-gray-200 border-x-2 border-b-2 border-gray-300"></div>
+
+            <div className="flex items-center justify-between border-b-2 border-retro-shadow/30 pb-4 mt-8">
+                <h1 className="text-xl font-dos font-bold text-retro-text uppercase">HOST SESSION</h1>
                 <ConnectionStatus state={status} />
             </div>
 
@@ -148,19 +151,19 @@ export default function Send() {
             )}
 
             {status === CONNECTION_STATES.COMPLETED && (
-                <div className="text-center p-6 bg-green-500/10 border border-green-500/20 rounded-2xl">
-                    <p className="text-green-400 text-lg font-medium">
-                        🎉 File sent successfully!
+                <div className="text-center p-6 bg-retro-input border border-retro-shadow shadow-brutal mt-4">
+                    <p className="text-retro-text text-lg font-dos mb-2 font-bold uppercase">
+                        FILE UPLOAD SEQUENCE COMPLETE
                     </p>
-                    <p className="text-gray-400 text-sm mt-1">
-                        The receiver has downloaded the file.
+                    <p className="text-retro-gray text-xs font-mono uppercase">
+                        Target has received the datablock.
                     </p>
                 </div>
             )}
 
             {status === CONNECTION_STATES.ERROR && (
-                <div className="text-center p-6 bg-red-500/10 border border-red-500/20 rounded-2xl">
-                    <p className="text-red-400">Connection failed. Please try again.</p>
+                <div className="text-center p-6 bg-red-100 border border-red-300 shadow-brutal mt-4">
+                    <p className="text-red-800 font-dos text-sm mb-4 uppercase">CRITICAL UPLINK FAILURE</p>
                     <button
                         onClick={() => {
                             cleanup();
@@ -168,16 +171,16 @@ export default function Send() {
                             setRoomId(null);
                             setStatus(CONNECTION_STATES.IDLE);
                         }}
-                        className="mt-3 px-4 py-2 bg-gray-800 rounded-lg text-sm hover:bg-gray-700 transition-colors"
+                        className="bg-retro-text text-white font-dos text-xs px-6 py-3 uppercase shadow-brutal-sm active:translate-y-1 active:translate-x-1 active:shadow-brutal-active hover:bg-black"
                     >
-                        Start Over
+                        RESTART SEQUENCE
                     </button>
                 </div>
             )}
 
             {status === CONNECTION_STATES.DISCONNECTED && (
-                <div className="text-center p-6 bg-red-500/10 border border-red-500/20 rounded-2xl">
-                    <p className="text-red-400">Receiver disconnected.</p>
+                <div className="text-center p-6 bg-yellow-100 border border-yellow-300 shadow-brutal mt-4">
+                    <p className="text-yellow-800 font-dos text-sm mb-4 uppercase">TARGET DISCONNECTED</p>
                     <button
                         onClick={() => {
                             cleanup();
@@ -185,12 +188,21 @@ export default function Send() {
                             setRoomId(null);
                             setStatus(CONNECTION_STATES.IDLE);
                         }}
-                        className="mt-3 px-4 py-2 bg-gray-800 rounded-lg text-sm hover:bg-gray-700 transition-colors"
+                        className="bg-retro-text text-white font-dos text-xs px-6 py-3 uppercase shadow-brutal-sm active:translate-y-1 active:translate-x-1 active:shadow-brutal-active hover:bg-black"
                     >
-                        Start Over
+                        RESTART SEQUENCE
                     </button>
                 </div>
             )}
+            
+            {/* Footer detail */}
+            <div className="mt-8 pt-4 border-t-2 border-retro-shadow/40 flex justify-between items-end">
+                <div className="font-dos text-[10px] text-retro-gray uppercase">
+                    <div>OPERATION</div>
+                    <div className="text-retro-text">CREATE.BIN</div>
+                </div>
+                <div className="w-4 h-4 bg-retro-brown"></div>
+            </div>
         </div>
     );
 }
