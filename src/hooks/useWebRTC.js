@@ -12,6 +12,7 @@ import { CONNECTION_STATES } from '../utils/constants';
 export function useWebRTC(socket) {
     const peerConnectionRef = useRef(null);
     const dataChannelRef = useRef(null);
+    const iceQueueRef = useRef([]); // ICE Candidate queue
     const [connectionState, setConnectionState] = useState(CONNECTION_STATES.IDLE);
     const [dataChannelOpen, setDataChannelOpen] = useState(false);
 
@@ -22,6 +23,7 @@ export function useWebRTC(socket) {
     }, []);
 
     const initConnection = useCallback(() => {
+        iceQueueRef.current = [];
         const pc = createPeerConnection(
             (candidate) => {
                 socket?.emit('signal-ice-candidate', { candidate });
@@ -38,6 +40,16 @@ export function useWebRTC(socket) {
         peerConnectionRef.current = pc;
         return pc;
     }, [socket]);
+
+    const flushIceQueue = useCallback(async () => {
+        const pc = peerConnectionRef.current;
+        if (!pc || !pc.remoteDescription) return;
+        
+        while (iceQueueRef.current.length > 0) {
+            const candidate = iceQueueRef.current.shift();
+            await addIceCandidate(pc, candidate);
+        }
+    }, []);
 
     const startAsSender = useCallback(async () => {
         const pc = initConnection();
@@ -88,22 +100,29 @@ export function useWebRTC(socket) {
         };
 
         const answer = await handleOffer(pc, offer);
+        await flushIceQueue(); // Flush any candidates received while handling offer
 
         socket?.emit('signal-answer', { answer });
         setConnectionState(CONNECTION_STATES.CONNECTING);
 
         return pc;
-    }, [initConnection, socket]);
+    }, [initConnection, flushIceQueue, socket]);
 
     const onAnswer = useCallback(async (answer) => {
         if (peerConnectionRef.current) {
             await handleAnswer(peerConnectionRef.current, answer);
+            await flushIceQueue(); // Flush any candidates received while validating answer
         }
-    }, []);
+    }, [flushIceQueue]);
 
     const onIceCandidate = useCallback(async (candidate) => {
-        if (peerConnectionRef.current) {
-            await addIceCandidate(peerConnectionRef.current, candidate);
+        const pc = peerConnectionRef.current;
+        if (pc) {
+            if (pc.remoteDescription) {
+                await addIceCandidate(pc, candidate);
+            } else {
+                iceQueueRef.current.push(candidate);
+            }
         }
     }, []);
 
@@ -114,6 +133,7 @@ export function useWebRTC(socket) {
         closePeerConnection(peerConnectionRef.current);
         peerConnectionRef.current = null;
         dataChannelRef.current = null;
+        iceQueueRef.current = [];
         setDataChannelOpen(false);
         setConnectionState(CONNECTION_STATES.IDLE);
     }, []);

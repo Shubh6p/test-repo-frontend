@@ -1,11 +1,14 @@
-export const CHUNK_SIZE = 64 * 1024; // 64KB per chunk
+export const CHUNK_SIZE = 16 * 1024; // 16KB per chunk (Maximum optimal compatibility size for cross-network WebRTC)
 
-export const BUFFER_THRESHOLD = 1024 * 1024; // 1MB
+export const BUFFER_THRESHOLD = 64 * 1024; // 64KB Buffer Bloat Prevention
 
 export const ICE_SERVERS = {
     iceServers: [
         { urls: 'stun:stun.l.google.com:19302' },
         { urls: 'stun:stun1.l.google.com:19302' },
+        { urls: 'stun:stun2.l.google.com:19302' },
+        { urls: 'stun:stun3.l.google.com:19302' },
+        { urls: 'stun:stun.cloudflare.com:3478' },
         {
             urls: 'turn:openrelay.metered.ca:80',
             username: 'openrelayproject',
