@@ -53,8 +53,18 @@ export default function Receive() {
         if (webrtcTimeoutRef.current) clearTimeout(webrtcTimeoutRef.current);
         cleanup();
         cleanupSocketReceiver();
+        if (socket) socket.emit('leave-room');
         toast.warning('SESSION TERMINATED');
         setTimeout(() => navigate('/'), 300);
+    };
+
+    const handleReconnect = () => {
+        cleanup();
+        cleanupSocketReceiver();
+        setPeerConnected(false);
+        setStatus(CONNECTION_STATES.IDLE);
+        hasStartedReceiving.current = false;
+        toastFiredRef.current.connected = false;
     };
 
     // Toast on new file received
@@ -270,20 +280,32 @@ export default function Receive() {
                                 {receivedFiles.length} file{receivedFiles.length > 1 ? 's' : ''} received this session
                             </p>
                         )}
-                        <button onClick={() => { cleanup(); cleanupSocketReceiver(); navigate('/'); }}
-                            className="bg-retro-text text-white font-dos text-xs px-6 py-3 uppercase shadow-brutal-sm transition-all duration-150 active:translate-y-1 active:translate-x-1 hover:bg-black">
-                            RETURN TO BASE
-                        </button>
+                        <div className="flex gap-4 justify-center mt-4">
+                            <button onClick={() => { cleanup(); cleanupSocketReceiver(); navigate('/'); }}
+                                className="bg-retro-text text-white font-dos text-xs px-6 py-3 uppercase shadow-brutal-sm transition-all duration-150 active:translate-y-1 active:translate-x-1 hover:bg-black">
+                                RETURN TO BASE
+                            </button>
+                            <button onClick={handleReconnect}
+                                className="bg-retro-olive text-white font-dos text-xs px-6 py-3 uppercase shadow-brutal-sm transition-all duration-150 active:translate-y-1 active:translate-x-1 hover:bg-retro-olive/80">
+                                JOIN ANOTHER SESSION
+                            </button>
+                        </div>
                     </div>
                 )}
 
                 {status === CONNECTION_STATES.ERROR && (
                     <div className="text-center p-6 bg-red-100 border border-red-300 shadow-brutal mt-4 animate-pop-in">
                         <p className="text-red-800 font-dos text-sm mb-4 uppercase">CRITICAL UPLINK FAILURE</p>
-                        <button onClick={() => { cleanup(); cleanupSocketReceiver(); navigate('/'); }}
-                            className="bg-retro-text text-white font-dos text-xs px-6 py-3 uppercase shadow-brutal-sm transition-all duration-150 active:translate-y-1 active:translate-x-1 hover:bg-black">
-                            RETURN TO BASE
-                        </button>
+                        <div className="flex gap-4 justify-center">
+                            <button onClick={() => { cleanup(); cleanupSocketReceiver(); navigate('/'); }}
+                                className="bg-retro-text text-white font-dos text-xs px-6 py-3 uppercase shadow-brutal-sm transition-all duration-150 active:translate-y-1 active:translate-x-1 hover:bg-black">
+                                RETURN TO BASE
+                            </button>
+                            <button onClick={handleReconnect}
+                                className="bg-retro-olive text-white font-dos text-xs px-6 py-3 uppercase shadow-brutal-sm transition-all duration-150 active:translate-y-1 active:translate-x-1 hover:bg-retro-olive/80">
+                                JOIN ANOTHER SESSION
+                            </button>
+                        </div>
                     </div>
                 )}
 

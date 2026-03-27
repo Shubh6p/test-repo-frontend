@@ -9,8 +9,8 @@ export default function Footer() {
                     <strong>DIRECTDROP P2P PROTOCOL</strong>
                 </p>
                 <p className="leading-relaxed font-mono normal-case text-xs md:text-sm">
-                    Engineered to help students seamlessly share files between devices across any network constraint. Datablocks are transferred strictly via a secure, peer-to-peer WebRTC tunnel. 
-                    <br/><br/>
+                    Engineered to help students seamlessly share files between devices across any network constraint. Datablocks are transferred strictly via a secure, peer-to-peer WebRTC tunnel.
+                    <br /><br />
                     <strong>Zero server storage.</strong> Absolutely no retention. <strong>End-to-End Encrypted</strong> under the DTLS standard. Fast, brutal, and totally free.
                 </p>
                 <div className="flex items-center justify-center md:justify-start gap-6 pt-2">
@@ -18,15 +18,15 @@ export default function Footer() {
                     <span className="flex items-center gap-2"><Zap className="w-4 h-4 text-retro-amber" /> MAX BANDWIDTH</span>
                 </div>
             </div>
-            
+
             <div className="flex flex-col items-center md:items-end gap-3 border-t-4 border-retro-shadow/50 md:border-t-0 md:border-l-4 md:pl-8 pt-6 md:pt-0 w-full md:w-auto">
                 <div className="bg-retro-input border-2 border-retro-shadow p-4 shadow-brutal-sm text-retro-text flex items-center justify-center gap-2">
                     <span>MADE WITH</span>
                     <Heart className="w-4 h-4 text-red-600 animate-pulse fill-red-600" />
                     <span>BY AB</span>
                 </div>
-                <p className="opacity-70 font-mono mt-2 tracking-widest text-[#787878]">SYS.VER_1.0.0</p>
-                <p className="opacity-70 font-mono tracking-widest text-[#787878]">INIT // 2026</p>
+                <p className="opacity-70 font-mono mt-2 tracking-widest text-[#787878]">SYS.VER 1.0.0</p>
+                <p className="opacity-70 font-mono tracking-widest text-[#787878]">INIT 2026</p>
             </div>
         </footer>
     );

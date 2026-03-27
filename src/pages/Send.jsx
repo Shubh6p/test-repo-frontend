@@ -60,8 +60,17 @@ export default function Send() {
     const handleAbort = () => {
         if (webrtcTimeoutRef.current) clearTimeout(webrtcTimeoutRef.current);
         cleanup();
+        if (socket) socket.emit('leave-room');
         toast.warning('SESSION TERMINATED');
         setTimeout(() => navigate('/'), 300);
+    };
+
+    const handleReconnect = () => {
+        cleanup();
+        setPeerConnected(false);
+        setRoomId(null);
+        resetForNext();
+        handleCreateRoom();
     };
 
     // Step 1: Create room immediately
@@ -308,10 +317,16 @@ export default function Send() {
                 {status === CONNECTION_STATES.ERROR && (
                     <div className="text-center p-6 bg-red-100 border border-red-300 shadow-brutal mt-4 animate-pop-in">
                         <p className="text-red-800 font-dos text-sm mb-4 uppercase">CRITICAL UPLINK FAILURE</p>
-                        <button onClick={() => { cleanup(); navigate('/'); }}
-                            className="bg-retro-text text-white font-dos text-xs px-6 py-3 uppercase shadow-brutal-sm transition-all duration-150 active:translate-y-1 active:translate-x-1 hover:bg-black">
-                            RETURN TO BASE
-                        </button>
+                        <div className="flex gap-4 justify-center">
+                            <button onClick={() => { cleanup(); navigate('/'); }}
+                                className="bg-retro-text text-white font-dos text-xs px-6 py-3 uppercase shadow-brutal-sm transition-all duration-150 active:translate-y-1 active:translate-x-1 hover:bg-black">
+                                RETURN TO BASE
+                            </button>
+                            <button onClick={handleReconnect}
+                                className="bg-retro-olive text-white font-dos text-xs px-6 py-3 uppercase shadow-brutal-sm transition-all duration-150 active:translate-y-1 active:translate-x-1 hover:bg-retro-olive/80">
+                                HOST NEW SESSION
+                            </button>
+                        </div>
                     </div>
                 )}
 
@@ -323,10 +338,16 @@ export default function Send() {
                                 {sentFiles.length} file{sentFiles.length > 1 ? 's' : ''} transmitted before disconnect
                             </p>
                         )}
-                        <button onClick={() => { cleanup(); navigate('/'); }}
-                            className="bg-retro-text text-white font-dos text-xs px-6 py-3 uppercase shadow-brutal-sm transition-all duration-150 active:translate-y-1 active:translate-x-1 hover:bg-black">
-                            RETURN TO BASE
-                        </button>
+                        <div className="flex gap-4 justify-center mt-4">
+                            <button onClick={() => { cleanup(); navigate('/'); }}
+                                className="bg-retro-text text-white font-dos text-xs px-6 py-3 uppercase shadow-brutal-sm transition-all duration-150 active:translate-y-1 active:translate-x-1 hover:bg-black">
+                                RETURN TO BASE
+                            </button>
+                            <button onClick={handleReconnect}
+                                className="bg-retro-olive text-white font-dos text-xs px-6 py-3 uppercase shadow-brutal-sm transition-all duration-150 active:translate-y-1 active:translate-x-1 hover:bg-retro-olive/80">
+                                HOST NEW SESSION
+                            </button>
+                        </div>
                     </div>
                 )}
 
