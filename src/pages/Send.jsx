@@ -60,19 +60,20 @@ export default function Send() {
     const handleAbort = () => {
         if (webrtcTimeoutRef.current) clearTimeout(webrtcTimeoutRef.current);
         cleanup();
-        sessionStorage.removeItem('directdrop_last_room_id'); // 1. Clear room history
+        sessionStorage.removeItem('directdrop_last_room_id');
         if (socket) socket.emit('leave-room');
         toast.warning('SESSION TERMINATED');
-        setTimeout(() => navigate('/'), 300);
+        // Hard reload to home
+        setTimeout(() => {
+            window.location.href = '/';
+        }, 300);
     };
 
     const handleReconnect = () => {
         cleanup();
-        sessionStorage.removeItem('directdrop_last_room_id'); // 2. Clear before creating new
-        setPeerConnected(false);
-        setRoomId(null);
-        resetForNext();
-        handleCreateRoom();
+        sessionStorage.removeItem('directdrop_last_room_id');
+        // Hard reload the page to start a fresh host session
+        window.location.reload();
     };
 
     // Step 1: Create room immediately
@@ -90,29 +91,37 @@ export default function Send() {
         }
     }, [emit, toast, sessionId]);
 
-    // Handle session restoration
+    // Handle session restoration and initial room creation
     useEffect(() => {
-        const restoreSession = async () => {
+        let isCancelled = false;
+        
+        const initSession = async () => {
+            if (!isConnected || roomId) return;
+
             const lastRoomId = sessionStorage.getItem('directdrop_last_room_id');
-            // Only attempt restore if we are connected but don't have a roomId state yet
-            if (lastRoomId && isConnected && !roomId) {
+            if (lastRoomId) {
                 try {
                     console.log('[Send] Attempting to restore session...', lastRoomId);
                     await emit('reconnect-room', { roomId: lastRoomId, sessionId });
-                    setRoomId(lastRoomId);
-                    setStatus(CONNECTION_STATES.WAITING);
-                    toast.info('SESSION RESTORED');
+                    if (!isCancelled) {
+                        setRoomId(lastRoomId);
+                        setStatus(CONNECTION_STATES.WAITING);
+                        toast.info('SESSION RESTORED');
+                    }
                 } catch (err) {
                     console.log('[Send] Session restoration failed:', err.message);
-                    sessionStorage.removeItem('directdrop_last_room_id');
-                    handleCreateRoom(); // Start fresh if restoration fails
+                    if (!isCancelled) {
+                        sessionStorage.removeItem('directdrop_last_room_id');
+                        handleCreateRoom();
+                    }
                 }
-            } else if (isConnected && !roomId) {
+            } else {
                 handleCreateRoom();
             }
         };
 
-        restoreSession();
+        initSession();
+        return () => { isCancelled = true; };
     }, [isConnected, roomId, handleCreateRoom, emit, toast, sessionId]);
 
     const fallbackToRelay = useCallback(() => {
@@ -360,7 +369,7 @@ export default function Send() {
                     <div className="text-center p-6 bg-red-100 border border-red-300 shadow-brutal mt-4 animate-pop-in">
                         <p className="text-red-800 font-dos text-sm mb-4 uppercase">CRITICAL UPLINK FAILURE</p>
                         <div className="flex gap-4 justify-center">
-                            <button onClick={() => { cleanup(); navigate('/'); }}
+                            <button onClick={() => { cleanup(); window.location.href = '/'; }}
                                 className="bg-retro-text text-white font-dos text-xs px-6 py-3 uppercase shadow-brutal-sm transition-all duration-150 active:translate-y-1 active:translate-x-1 hover:bg-black">
                                 RETURN TO BASE
                             </button>
@@ -381,7 +390,7 @@ export default function Send() {
                             </p>
                         )}
                         <div className="flex gap-4 justify-center mt-4">
-                            <button onClick={() => { cleanup(); navigate('/'); }}
+                            <button onClick={() => { cleanup(); window.location.href = '/'; }}
                                 className="bg-retro-text text-white font-dos text-xs px-6 py-3 uppercase shadow-brutal-sm transition-all duration-150 active:translate-y-1 active:translate-x-1 hover:bg-black">
                                 RETURN TO BASE
                             </button>

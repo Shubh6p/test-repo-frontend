@@ -53,20 +53,21 @@ export default function Receive() {
         if (webrtcTimeoutRef.current) clearTimeout(webrtcTimeoutRef.current);
         cleanup();
         cleanupSocketReceiver();
-        if (socket) socket.emit('leave-room');
         sessionStorage.removeItem('directdrop_last_room_id');
+        if (socket) socket.emit('leave-room');
         toast.warning('SESSION TERMINATED');
-        setTimeout(() => navigate('/'), 300);
+        // Hard reload to home
+        setTimeout(() => {
+            window.location.href = '/';
+        }, 300);
     };
 
     const handleReconnect = () => {
         cleanup();
         cleanupSocketReceiver();
-        setPeerConnected(false);
-        setStatus(CONNECTION_STATES.IDLE);
         sessionStorage.removeItem('directdrop_last_room_id');
-        hasStartedReceiving.current = false;
-        toastFiredRef.current.connected = false;
+        // Hard reload the page to start a fresh join session
+        window.location.reload();
     };
 
     // Toast on new file received
@@ -117,28 +118,36 @@ export default function Receive() {
 
     // Handle session restoration
     useEffect(() => {
+        let isCancelled = false;
+
         const restoreSession = async () => {
             const lastRoomId = sessionStorage.getItem('directdrop_last_room_id');
             if (lastRoomId && isConnected && status === CONNECTION_STATES.IDLE && !joinLoading) {
                 try {
                     console.log('[Receive] Attempting to restore session...', lastRoomId);
                     await emit('reconnect-room', { roomId: lastRoomId, sessionId });
-                    setStatus(CONNECTION_STATES.CONNECTING);
-                    toast.info('SESSION RESTORED');
                     
-                    webrtcTimeoutRef.current = setTimeout(() => {
-                        if (!hasStartedReceiving.current) {
-                            fallbackToRelay();
-                        }
-                    }, WEBRTC_TIMEOUT);
+                    if (!isCancelled) {
+                        setStatus(CONNECTION_STATES.CONNECTING);
+                        toast.info('SESSION RESTORED');
+                        
+                        webrtcTimeoutRef.current = setTimeout(() => {
+                            if (!hasStartedReceiving.current) {
+                                fallbackToRelay();
+                            }
+                        }, WEBRTC_TIMEOUT);
+                    }
                 } catch (err) {
                     console.log('[Receive] Session restoration failed:', err.message);
-                    sessionStorage.removeItem('directdrop_last_room_id');
+                    if (!isCancelled) {
+                        sessionStorage.removeItem('directdrop_last_room_id');
+                    }
                 }
             }
         };
 
         restoreSession();
+        return () => { isCancelled = true; };
     }, [isConnected, status, joinLoading, emit, toast, sessionId, fallbackToRelay]);
 
     useEffect(() => {
@@ -322,7 +331,7 @@ export default function Receive() {
                             </p>
                         )}
                         <div className="flex gap-4 justify-center mt-4">
-                            <button onClick={() => { cleanup(); cleanupSocketReceiver(); navigate('/'); }}
+                            <button onClick={() => { cleanup(); cleanupSocketReceiver(); window.location.href = '/'; }}
                                 className="bg-retro-text text-white font-dos text-xs px-6 py-3 uppercase shadow-brutal-sm transition-all duration-150 active:translate-y-1 active:translate-x-1 hover:bg-black">
                                 RETURN TO BASE
                             </button>
@@ -338,7 +347,7 @@ export default function Receive() {
                     <div className="text-center p-6 bg-red-100 border border-red-300 shadow-brutal mt-4 animate-pop-in">
                         <p className="text-red-800 font-dos text-sm mb-4 uppercase">CRITICAL UPLINK FAILURE</p>
                         <div className="flex gap-4 justify-center">
-                            <button onClick={() => { cleanup(); cleanupSocketReceiver(); navigate('/'); }}
+                            <button onClick={() => { cleanup(); cleanupSocketReceiver(); window.location.href = '/'; }}
                                 className="bg-retro-text text-white font-dos text-xs px-6 py-3 uppercase shadow-brutal-sm transition-all duration-150 active:translate-y-1 active:translate-x-1 hover:bg-black">
                                 RETURN TO BASE
                             </button>
