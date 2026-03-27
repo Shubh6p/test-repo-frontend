@@ -27,7 +27,7 @@ export default function Send() {
     const dataChannelOpenRef = useRef(false);
     const toastFiredRef = useRef({});
 
-    const { socket, isConnected, emit, on } = useSocket();
+    const { socket, isConnected, sessionId, emit, on } = useSocket();
     const {
         dataChannel,
         connectionState,
@@ -76,8 +76,9 @@ export default function Send() {
     // Step 1: Create room immediately
     const handleCreateRoom = useCallback(async () => {
         try {
-            const response = await emit('create-room', null);
+            const response = await emit('create-room', { sessionId, fileInfo: null });
             setRoomId(response.roomId);
+            sessionStorage.setItem('directdrop_last_room_id', response.roomId);
             setStatus(CONNECTION_STATES.WAITING);
             toast.info('ROOM CREATED — SHARE THE CODE');
         } catch (err) {
@@ -85,13 +86,32 @@ export default function Send() {
             setStatus(CONNECTION_STATES.ERROR);
             toast.error('FAILED TO CREATE ROOM');
         }
-    }, [emit]);
+    }, [emit, toast, sessionId]);
 
+    // Handle session restoration
     useEffect(() => {
-        if (isConnected && !roomId) {
-            handleCreateRoom();
-        }
-    }, [isConnected, roomId, handleCreateRoom]);
+        const restoreSession = async () => {
+            const lastRoomId = sessionStorage.getItem('directdrop_last_room_id');
+            // Only attempt restore if we are connected but don't have a roomId state yet
+            if (lastRoomId && isConnected && !roomId) {
+                try {
+                    console.log('[Send] Attempting to restore session...', lastRoomId);
+                    await emit('reconnect-room', { roomId: lastRoomId, sessionId });
+                    setRoomId(lastRoomId);
+                    setStatus(CONNECTION_STATES.WAITING);
+                    toast.info('SESSION RESTORED');
+                } catch (err) {
+                    console.log('[Send] Session restoration failed:', err.message);
+                    sessionStorage.removeItem('directdrop_last_room_id');
+                    handleCreateRoom(); // Start fresh if restoration fails
+                }
+            } else if (isConnected && !roomId) {
+                handleCreateRoom();
+            }
+        };
+
+        restoreSession();
+    }, [isConnected, roomId, handleCreateRoom, emit, toast, sessionId]);
 
     const fallbackToRelay = useCallback(() => {
         if (hasStartedTransfer.current) return;
@@ -143,10 +163,20 @@ export default function Send() {
             toast.error('PEER DISCONNECTED');
         });
 
+        const cleanupReconnect = on('peer-reconnected', (data) => {
+            if (data.role === 'receiver') {
+                console.log('[Send] Receiver reconnected!');
+                toast.success('PEER RECONNECTED');
+                setPeerConnected(true);
+                setStatus(CONNECTION_STATES.CONNECTED);
+            }
+        });
+
         return () => {
             cleanupAnswer();
             cleanupIce();
             cleanupDisconnect();
+            cleanupReconnect();
         };
     }, [socket, on, onAnswer, onIceCandidate]);
 

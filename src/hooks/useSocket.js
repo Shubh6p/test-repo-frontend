@@ -1,9 +1,20 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
 import { connectSocket } from '../services/socket';
 
+// Helper to get or create a persistent session ID
+const getSessionId = () => {
+    let id = localStorage.getItem('directdrop_session_id');
+    if (!id) {
+        id = Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15);
+        localStorage.setItem('directdrop_session_id', id);
+    }
+    return id;
+};
+
 export function useSocket() {
     const socketRef = useRef(null);
     const [isConnected, setIsConnected] = useState(false);
+    const sessionId = useRef(getSessionId());
 
     useEffect(() => {
         const socket = connectSocket();
@@ -47,6 +58,7 @@ export function useSocket() {
     return {
         socket: socketRef.current,
         isConnected,
+        sessionId: sessionId.current,
         emit,
         on
     };

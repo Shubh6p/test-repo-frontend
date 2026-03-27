@@ -29,7 +29,7 @@ export default function Receive() {
     const prevReceivedCount = useRef(0);
     const toastFiredRef = useRef({});
 
-    const { socket, isConnected, emit, on } = useSocket();
+    const { socket, isConnected, sessionId, emit, on } = useSocket();
     const {
         dataChannel,
         dataChannelOpen,
@@ -95,7 +95,8 @@ export default function Receive() {
         hasStartedReceiving.current = false;
 
         try {
-            await emit('join-room', code);
+            await emit('join-room', { roomId: code, sessionId });
+            sessionStorage.setItem('directdrop_last_room_id', code);
             setStatus(CONNECTION_STATES.CONNECTING);
             toast.info('JOINING SESSION...');
 
@@ -110,7 +111,33 @@ export default function Receive() {
         } finally {
             setJoinLoading(false);
         }
-    }, [emit, fallbackToRelay]);
+    }, [emit, fallbackToRelay, toast, sessionId]);
+
+    // Handle session restoration
+    useEffect(() => {
+        const restoreSession = async () => {
+            const lastRoomId = sessionStorage.getItem('directdrop_last_room_id');
+            if (lastRoomId && isConnected && status === CONNECTION_STATES.IDLE && !joinLoading) {
+                try {
+                    console.log('[Receive] Attempting to restore session...', lastRoomId);
+                    await emit('reconnect-room', { roomId: lastRoomId, sessionId });
+                    setStatus(CONNECTION_STATES.CONNECTING);
+                    toast.info('SESSION RESTORED');
+                    
+                    webrtcTimeoutRef.current = setTimeout(() => {
+                        if (!hasStartedReceiving.current) {
+                            fallbackToRelay();
+                        }
+                    }, WEBRTC_TIMEOUT);
+                } catch (err) {
+                    console.log('[Receive] Session restoration failed:', err.message);
+                    sessionStorage.removeItem('directdrop_last_room_id');
+                }
+            }
+        };
+
+        restoreSession();
+    }, [isConnected, status, joinLoading, emit, toast, sessionId, fallbackToRelay]);
 
     useEffect(() => {
         if (!socket) return;
@@ -131,10 +158,22 @@ export default function Receive() {
             toast.error('PEER DISCONNECTED');
         });
 
+        const cleanupReconnect = on('peer-reconnected', (data) => {
+            if (data.role === 'sender') {
+                console.log('[Receive] Sender reconnected!');
+                toast.success('PEER RECONNECTED');
+                setPeerConnected(true);
+                setStatus(CONNECTION_STATES.CONNECTED);
+                // We don't need to call startReceiving again as the webrtc/relay channels 
+                // might still be active or will be re-established via signals
+            }
+        });
+
         return () => {
             cleanupOffer();
             cleanupIce();
             cleanupDisconnect();
+            cleanupReconnect();
             if (webrtcTimeoutRef.current) clearTimeout(webrtcTimeoutRef.current);
         };
     }, [socket, on, startAsReceiver, onIceCandidate, fallbackToRelay]);
