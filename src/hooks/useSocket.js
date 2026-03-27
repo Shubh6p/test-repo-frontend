@@ -3,10 +3,10 @@ import { connectSocket } from '../services/socket';
 
 // Helper to get or create a persistent session ID
 const getSessionId = () => {
-    let id = localStorage.getItem('directdrop_session_id');
+    let id = localStorage.getItem('klickshare_session_id');
     if (!id) {
         id = Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15);
-        localStorage.setItem('directdrop_session_id', id);
+        localStorage.setItem('klickshare_session_id', id);
     }
     return id;
 };

@@ -60,7 +60,7 @@ export default function Send() {
     const handleAbort = () => {
         if (webrtcTimeoutRef.current) clearTimeout(webrtcTimeoutRef.current);
         cleanup();
-        sessionStorage.removeItem('directdrop_last_room_id');
+        sessionStorage.removeItem('klickshare_last_room_id');
         if (socket) socket.emit('leave-room');
         toast.warning('SESSION TERMINATED');
         // Hard reload to home
@@ -71,7 +71,7 @@ export default function Send() {
 
     const handleReconnect = () => {
         cleanup();
-        sessionStorage.removeItem('directdrop_last_room_id');
+        sessionStorage.removeItem('klickshare_last_room_id');
         // Hard reload the page to start a fresh host session
         window.location.reload();
     };
@@ -81,7 +81,7 @@ export default function Send() {
         try {
             const response = await emit('create-room', { sessionId, fileInfo: null });
             setRoomId(response.roomId);
-            sessionStorage.setItem('directdrop_last_room_id', response.roomId);
+            sessionStorage.setItem('klickshare_last_room_id', response.roomId);
             setStatus(CONNECTION_STATES.WAITING);
             toast.info('ROOM CREATED — SHARE THE CODE');
         } catch (err) {
@@ -98,7 +98,7 @@ export default function Send() {
         const initSession = async () => {
             if (!isConnected || roomId) return;
 
-            const lastRoomId = sessionStorage.getItem('directdrop_last_room_id');
+            const lastRoomId = sessionStorage.getItem('klickshare_last_room_id');
             if (lastRoomId) {
                 try {
                     console.log('[Send] Attempting to restore session...', lastRoomId);
@@ -111,7 +111,7 @@ export default function Send() {
                 } catch (err) {
                     console.log('[Send] Session restoration failed:', err.message);
                     if (!isCancelled) {
-                        sessionStorage.removeItem('directdrop_last_room_id');
+                        sessionStorage.removeItem('klickshare_last_room_id');
                         handleCreateRoom();
                     }
                 }

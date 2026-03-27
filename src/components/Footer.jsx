@@ -6,7 +6,7 @@ export default function Footer() {
             <div className="flex-1 max-w-2xl space-y-4">
                 <p className="flex items-center justify-center md:justify-start gap-2 text-retro-text">
                     <Info className="w-4 h-4 text-retro-amber" />
-                    <strong>DIRECTDROP P2P PROTOCOL</strong>
+                    <strong>KLICK SHARE P2P PROTOCOL</strong>
                 </p>
                 <p className="leading-relaxed font-mono normal-case text-xs md:text-sm">
                     Engineered to help students seamlessly share files between devices across any network constraint. Datablocks are transferred strictly via a secure, peer-to-peer WebRTC tunnel.

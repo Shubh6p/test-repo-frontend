@@ -53,7 +53,7 @@ export default function Receive() {
         if (webrtcTimeoutRef.current) clearTimeout(webrtcTimeoutRef.current);
         cleanup();
         cleanupSocketReceiver();
-        sessionStorage.removeItem('directdrop_last_room_id');
+        sessionStorage.removeItem('klickshare_last_room_id');
         if (socket) socket.emit('leave-room');
         toast.warning('SESSION TERMINATED');
         // Hard reload to home
@@ -65,7 +65,7 @@ export default function Receive() {
     const handleReconnect = () => {
         cleanup();
         cleanupSocketReceiver();
-        sessionStorage.removeItem('directdrop_last_room_id');
+        sessionStorage.removeItem('klickshare_last_room_id');
         // Hard reload the page to start a fresh join session
         window.location.reload();
     };
@@ -99,7 +99,7 @@ export default function Receive() {
 
         try {
             await emit('join-room', { roomId: code, sessionId });
-            sessionStorage.setItem('directdrop_last_room_id', code);
+            sessionStorage.setItem('klickshare_last_room_id', code);
             setStatus(CONNECTION_STATES.CONNECTING);
             toast.info('JOINING SESSION...');
 
@@ -121,7 +121,7 @@ export default function Receive() {
         let isCancelled = false;
 
         const restoreSession = async () => {
-            const lastRoomId = sessionStorage.getItem('directdrop_last_room_id');
+            const lastRoomId = sessionStorage.getItem('klickshare_last_room_id');
             if (lastRoomId && isConnected && status === CONNECTION_STATES.IDLE && !joinLoading) {
                 try {
                     console.log('[Receive] Attempting to restore session...', lastRoomId);
@@ -140,7 +140,7 @@ export default function Receive() {
                 } catch (err) {
                     console.log('[Receive] Session restoration failed:', err.message);
                     if (!isCancelled) {
-                        sessionStorage.removeItem('directdrop_last_room_id');
+                        sessionStorage.removeItem('klickshare_last_room_id');
                     }
                 }
             }
