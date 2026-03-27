@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useSocket } from '../hooks/useSocket';
 import { useWebRTC } from '../hooks/useWebRTC';
 import { useFileTransfer } from '../hooks/useFileTransfer';
@@ -9,6 +10,7 @@ import ConnectionStatus from '../components/ConnectionStatus';
 import { CONNECTION_STATES } from '../utils/constants';
 
 export default function Send() {
+    const navigate = useNavigate();
     const [file, setFile] = useState(null);
     const [roomId, setRoomId] = useState(null);
     const [status, setStatus] = useState(CONNECTION_STATES.IDLE);
@@ -34,6 +36,11 @@ export default function Send() {
     useEffect(() => {
         fileRef.current = file;
     }, [file]);
+
+    const handleAbort = () => {
+        cleanup();
+        navigate('/');
+    };
 
     const handleFileSelected = useCallback(async (selectedFile) => {
         if (!selectedFile) {
@@ -130,7 +137,17 @@ export default function Send() {
             <div className="absolute top-0 left-6 w-16 h-8 bg-gray-200 border-x-2 border-b-2 border-gray-300"></div>
 
             <div className="flex items-center justify-between border-b-2 border-retro-shadow/30 pb-4 mt-8">
-                <h1 className="text-xl font-dos font-bold text-retro-text uppercase">HOST SESSION</h1>
+                <div className="flex items-center gap-4">
+                    <h1 className="text-xl font-dos font-bold text-retro-text uppercase">HOST SESSION</h1>
+                    {[CONNECTION_STATES.WAITING, CONNECTION_STATES.CONNECTING, CONNECTION_STATES.TRANSFERRING].includes(status) && (
+                        <button
+                            onClick={handleAbort}
+                            className="bg-red-600/10 text-red-600 border border-red-600 font-dos text-[10px] px-3 py-1 uppercase transition-transform active:translate-y-[2px] active:translate-x-[2px] shadow-sm hover:bg-red-600 hover:text-white"
+                        >
+                            ABORT
+                        </button>
+                    )}
+                </div>
                 <ConnectionStatus state={status} />
             </div>
 

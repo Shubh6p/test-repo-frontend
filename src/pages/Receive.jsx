@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { useLocation } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { useSocket } from '../hooks/useSocket';
 import { useWebRTC } from '../hooks/useWebRTC';
 import { useFileTransfer } from '../hooks/useFileTransfer';
@@ -11,6 +11,7 @@ import { CONNECTION_STATES } from '../utils/constants';
 
 export default function Receive() {
     const location = useLocation();
+    const navigate = useNavigate();
     
     // Parse query params (if user lands here via a standard QR Scan link)
     const searchParams = new URLSearchParams(location.search);
@@ -39,6 +40,11 @@ export default function Receive() {
         transferResult,
         startReceiving
     } = useFileTransfer();
+
+    const handleAbort = () => {
+        cleanup();
+        navigate('/');
+    };
 
     const handleJoinRoom = useCallback(async (code) => {
         setJoinLoading(true);
@@ -110,7 +116,17 @@ export default function Receive() {
             <div className="absolute top-0 right-6 w-16 h-8 bg-gray-200 border-x-2 border-b-2 border-gray-300"></div>
 
             <div className="flex items-center justify-between border-b-2 border-retro-shadow/30 pb-4 mt-8">
-                <h1 className="text-xl font-dos font-bold text-retro-text uppercase">JOIN SESSION</h1>
+                <div className="flex items-center gap-4">
+                    <h1 className="text-xl font-dos font-bold text-retro-text uppercase">JOIN SESSION</h1>
+                    {[CONNECTION_STATES.CONNECTING, CONNECTION_STATES.TRANSFERRING].includes(status) && (
+                        <button
+                            onClick={handleAbort}
+                            className="bg-red-600/10 text-red-600 border border-red-600 font-dos text-[10px] px-3 py-1 uppercase transition-transform active:translate-y-[2px] active:translate-x-[2px] shadow-sm hover:bg-red-600 hover:text-white"
+                        >
+                            ABORT
+                        </button>
+                    )}
+                </div>
                 <ConnectionStatus state={status} />
             </div>
 
