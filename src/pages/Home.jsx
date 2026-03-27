@@ -1,26 +1,6 @@
-import { Link, useNavigate } from 'react-router-dom';
-import { useState } from 'react';
+import { Link } from 'react-router-dom';
 
 export default function Home() {
-    const navigate = useNavigate();
-    const [roomCode, setRoomCode] = useState('');
-
-    const handleJoin = (e) => {
-        e.preventDefault();
-        if (roomCode.length >= 7) {
-            navigate('/receive', { state: { predefinedCode: roomCode } });
-        } else {
-            navigate('/receive');
-        }
-    };
-
-    const handleRoomCodeChange = (e) => {
-        let value = e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, '');
-        if (value.length > 3) {
-            value = value.slice(0, 3) + '-' + value.slice(3, 6);
-        }
-        setRoomCode(value);
-    };
 
     return (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-8 md:gap-12 w-full max-w-4xl mx-auto">
@@ -60,31 +40,17 @@ export default function Home() {
                 <div className="absolute top-0 right-6 w-16 h-8 bg-gray-200 border-x-2 border-b-2 border-gray-300"></div>
 
                 <div className="flex-grow">
-                    <h2 className="font-dos text-xl md:text-2xl mb-8 font-bold tracking-tight text-retro-text">JOIN SESSION</h2>
+                    <h2 className="font-dos text-xl md:text-2xl mb-4 font-bold tracking-tight text-retro-text">JOIN SESSION</h2>
+                    <p className="text-retro-gray mb-8 text-sm md:text-base leading-relaxed">
+                        Connect to an existing secure peer-to-peer data tunnel. Enter target room ID or scan QR code on the next screen.
+                    </p>
                     
-                    <form onSubmit={handleJoin} className="space-y-6">
-                        <div className="bg-retro-input p-5 pb-6">
-                            <label className="block text-[10px] font-dos text-retro-text uppercase mb-3 font-bold">TARGET ROOM ID</label>
-                            <div className="flex items-center text-lg md:text-xl font-body text-retro-gray">
-                                <span className="text-retro-amber font-dos mr-3">&gt;</span>
-                                <input
-                                    type="text"
-                                    value={roomCode}
-                                    onChange={handleRoomCodeChange}
-                                    placeholder="XXX-XXX"
-                                    maxLength={7}
-                                    className="bg-transparent border-none outline-none w-full tracking-[0.2em] placeholder-retro-gray/40 text-retro-gray block font-bold uppercase disabled:opacity-50"
-                                />
-                            </div>
-                        </div>
-
-                        <button
-                            type="submit"
-                            className="w-full text-center bg-retro-olive text-white font-dos text-sm py-4 md:py-5 uppercase transition-transform active:translate-y-1 active:translate-x-1 shadow-brutal-sm active:shadow-brutal-active hover:bg-retro-oliveHover"
-                        >
-                            CONNECT UPLINK
-                        </button>
-                    </form>
+                    <Link
+                        to="/receive"
+                        className="block w-full text-center bg-retro-olive text-white font-dos text-sm py-4 md:py-5 uppercase transition-transform active:translate-y-1 active:translate-x-1 shadow-brutal-sm active:shadow-brutal-active hover:bg-retro-oliveHover"
+                    >
+                        CONNECT UPLINK
+                    </Link>
                 </div>
 
                 {/* Footer detail */}
