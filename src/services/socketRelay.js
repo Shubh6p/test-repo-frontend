@@ -2,8 +2,6 @@ import { RELAY_CHUNK_SIZE } from '../utils/constants';
 
 /**
  * Socket.io Relay: Sends file chunks through the signaling server
- * as a fallback when WebRTC DataChannel fails.
- * Uses acknowledgment-based flow control (no buffer overflow possible).
  */
 export function sendFileViaSocket(socket, file, onProgress) {
     return new Promise((resolve, reject) => {
@@ -12,7 +10,6 @@ export function sendFileViaSocket(socket, file, onProgress) {
         let bytesSent = 0;
         const startTime = Date.now();
 
-        // Step 1: Send metadata
         socket.emit('relay-metadata', {
             name: file.name,
             size: file.size,
@@ -43,7 +40,6 @@ export function sendFileViaSocket(socket, file, onProgress) {
         fileReader.onload = (event) => {
             try {
                 const arrayBuffer = event.target.result;
-                // Convert to base64 for socket transport
                 const uint8 = new Uint8Array(arrayBuffer);
                 let binary = '';
                 for (let i = 0; i < uint8.byteLength; i++) {
@@ -51,12 +47,10 @@ export function sendFileViaSocket(socket, file, onProgress) {
                 }
                 const base64 = btoa(binary);
 
-                // Send with acknowledgment callback for flow control
                 socket.emit('relay-chunk', {
                     data: base64,
                     index: currentChunk
                 }, () => {
-                    // Ack received — safe to send next chunk
                     bytesSent += arrayBuffer.byteLength;
                     currentChunk++;
                     offset += RELAY_CHUNK_SIZE;
@@ -91,7 +85,7 @@ export function sendFileViaSocket(socket, file, onProgress) {
 }
 
 /**
- * Socket.io Relay: Receives file chunks through the signaling server.
+ * Socket.io Relay: Receives file chunks (NO auto-download, returns blob)
  */
 export class SocketFileReceiver {
     constructor(socket, onProgress, onComplete) {
@@ -115,7 +109,6 @@ export class SocketFileReceiver {
         };
 
         this._handlers.chunk = (data, ack) => {
-            // Decode base64 back to ArrayBuffer
             const binary = atob(data.data);
             const uint8 = new Uint8Array(binary.length);
             for (let i = 0; i < binary.length; i++) {
@@ -142,12 +135,11 @@ export class SocketFileReceiver {
                 totalChunks: this.metadata.totalChunks
             });
 
-            // Acknowledge receipt to release sender
             if (typeof ack === 'function') ack();
         };
 
         this._handlers.complete = () => {
-            this.assembleAndDownload();
+            this.assembleFile();
         };
 
         this.socket.on('relay-metadata', this._handlers.metadata);
@@ -155,32 +147,26 @@ export class SocketFileReceiver {
         this.socket.on('relay-complete', this._handlers.complete);
     }
 
-    assembleAndDownload() {
+    assembleFile() {
         const blob = new Blob(this.chunks, {
             type: this.metadata.mimeType || 'application/octet-stream'
         });
 
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = this.metadata.name;
-        document.body.appendChild(a);
-        a.click();
-
-        setTimeout(() => {
-            document.body.removeChild(a);
-            URL.revokeObjectURL(url);
-        }, 100);
-
         const duration = (Date.now() - this.startTime) / 1000;
+
         this.onComplete({
             fileName: this.metadata.name,
             totalBytes: this.metadata.size,
+            mimeType: this.metadata.mimeType,
             duration,
-            speed: this.metadata.size / duration
+            speed: this.metadata.size / duration,
+            blob
         });
 
         this.chunks = [];
+        this.receivedBytes = 0;
+        this.metadata = null;
+        this.startTime = null;
     }
 
     cleanup() {

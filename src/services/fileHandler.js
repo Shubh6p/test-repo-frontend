@@ -1,5 +1,19 @@
 import { CHUNK_SIZE, BUFFER_THRESHOLD, BUFFER_LOW_THRESHOLD } from '../utils/constants';
 
+// Standalone download function — called manually by user
+export function downloadBlob(blob, fileName) {
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = fileName;
+    document.body.appendChild(a);
+    a.click();
+    setTimeout(() => {
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+    }, 100);
+}
+
 // SENDER: Send file in chunks with event-driven backpressure
 export function sendFile(dataChannel, file, onProgress) {
     return new Promise((resolve, reject) => {
@@ -29,9 +43,7 @@ export function sendFile(dataChannel, file, onProgress) {
 
         function readNextChunk() {
             if (offset >= file.size) {
-                // Step 3: Send completion signal
                 dataChannel.send(JSON.stringify({ type: 'complete' }));
-
                 const duration = (Date.now() - startTime) / 1000;
                 resolve({
                     totalBytes: file.size,
@@ -41,23 +53,20 @@ export function sendFile(dataChannel, file, onProgress) {
                 return;
             }
 
-            // Guard: ensure channel is still open
             if (dataChannel.readyState !== 'open') {
                 reject(new Error('DataChannel closed unexpectedly'));
                 return;
             }
 
-            // Event-driven backpressure: if buffer is full, pause and wait for drain event
             if (dataChannel.bufferedAmount > BUFFER_THRESHOLD) {
                 paused = true;
-                return; // onbufferedamountlow will resume
+                return;
             }
 
             const slice = file.slice(offset, offset + CHUNK_SIZE);
             fileReader.readAsArrayBuffer(slice);
         }
 
-        // Resume sending when buffer drains
         dataChannel.onbufferedamountlow = () => {
             if (paused) {
                 paused = false;
@@ -92,7 +101,6 @@ export function sendFile(dataChannel, file, onProgress) {
                     totalChunks
                 });
 
-                // Yield to event loop then continue
                 setTimeout(readNextChunk, 0);
             } catch (err) {
                 reject(err);
@@ -107,7 +115,7 @@ export function sendFile(dataChannel, file, onProgress) {
     });
 }
 
-// RECEIVER: Collect chunks and download
+// RECEIVER: Collect chunks and return blob (NO auto-download)
 export class FileReceiver {
     constructor(onProgress, onComplete) {
         this.chunks = [];
@@ -119,7 +127,6 @@ export class FileReceiver {
     }
 
     handleData(data) {
-        // JSON string = control message
         if (typeof data === 'string') {
             try {
                 const message = JSON.parse(data);
@@ -132,7 +139,7 @@ export class FileReceiver {
                 }
 
                 if (message.type === 'complete') {
-                    this.assembleAndDownload();
+                    this.assembleFile();
                     return;
                 }
             } catch (e) {
@@ -141,7 +148,6 @@ export class FileReceiver {
             return;
         }
 
-        // ArrayBuffer = file chunk
         if (data instanceof ArrayBuffer) {
             this.chunks.push(data);
             this.receivedBytes += data.byteLength;
@@ -164,31 +170,26 @@ export class FileReceiver {
         }
     }
 
-    assembleAndDownload() {
+    assembleFile() {
         const blob = new Blob(this.chunks, {
             type: this.metadata.mimeType || 'application/octet-stream'
         });
 
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = this.metadata.name;
-        document.body.appendChild(a);
-        a.click();
-
-        setTimeout(() => {
-            document.body.removeChild(a);
-            URL.revokeObjectURL(url);
-        }, 100);
-
         const duration = (Date.now() - this.startTime) / 1000;
+
+        // Return blob + metadata instead of auto-downloading
         this.onComplete({
             fileName: this.metadata.name,
             totalBytes: this.metadata.size,
+            mimeType: this.metadata.mimeType,
             duration,
-            speed: this.metadata.size / duration
+            speed: this.metadata.size / duration,
+            blob
         });
 
         this.chunks = [];
+        this.receivedBytes = 0;
+        this.metadata = null;
+        this.startTime = null;
     }
 }

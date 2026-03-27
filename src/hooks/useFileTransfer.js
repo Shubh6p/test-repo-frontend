@@ -14,6 +14,7 @@ export function useFileTransfer() {
     });
     const [transferResult, setTransferResult] = useState(null);
     const [isRelayMode, setIsRelayMode] = useState(false);
+    const [receivedFiles, setReceivedFiles] = useState([]);
     const fileReceiverRef = useRef(null);
     const socketReceiverRef = useRef(null);
 
@@ -55,6 +56,24 @@ export function useFileTransfer() {
         }
     }, []);
 
+    // Handler for when a file is fully received (adds to list, no auto-download)
+    const handleFileComplete = useCallback((result) => {
+        const fileEntry = {
+            id: Date.now() + '_' + Math.random().toString(36).slice(2, 8),
+            fileName: result.fileName,
+            totalBytes: result.totalBytes,
+            mimeType: result.mimeType,
+            duration: result.duration,
+            speed: result.speed,
+            blob: result.blob,
+            timestamp: new Date()
+        };
+
+        setReceivedFiles(prev => [...prev, fileEntry]);
+        setTransferState(CONNECTION_STATES.COMPLETED);
+        setTransferResult(result);
+    }, []);
+
     // WebRTC DataChannel receive
     const startReceiving = useCallback((dataChannel) => {
         setIsRelayMode(false);
@@ -66,10 +85,7 @@ export function useFileTransfer() {
                 });
                 setTransferState(CONNECTION_STATES.TRANSFERRING);
             },
-            (result) => {
-                setTransferState(CONNECTION_STATES.COMPLETED);
-                setTransferResult(result);
-            }
+            handleFileComplete
         );
 
         fileReceiverRef.current = receiver;
@@ -77,7 +93,7 @@ export function useFileTransfer() {
         dataChannel.onmessage = (event) => {
             receiver.handleData(event.data);
         };
-    }, []);
+    }, [handleFileComplete]);
 
     // Socket.io relay receive
     const startReceivingViaSocket = useCallback((socket) => {
@@ -93,14 +109,11 @@ export function useFileTransfer() {
                 });
                 setTransferState(CONNECTION_STATES.RELAY_TRANSFERRING);
             },
-            (result) => {
-                setTransferState(CONNECTION_STATES.COMPLETED);
-                setTransferResult(result);
-            }
+            handleFileComplete
         );
 
         socketReceiverRef.current = receiver;
-    }, []);
+    }, [handleFileComplete]);
 
     const cleanupSocketReceiver = useCallback(() => {
         if (socketReceiverRef.current) {
@@ -109,7 +122,8 @@ export function useFileTransfer() {
         }
     }, []);
 
-    const resetTransfer = useCallback(() => {
+    // Reset transfer state for sending another file (keeps receivedFiles)
+    const resetForNext = useCallback(() => {
         setTransferState(CONNECTION_STATES.IDLE);
         setProgress({
             percentage: 0,
@@ -119,20 +133,28 @@ export function useFileTransfer() {
             totalBytes: 0
         });
         setTransferResult(null);
+    }, []);
+
+    // Full reset (clears everything)
+    const resetTransfer = useCallback(() => {
+        resetForNext();
         setIsRelayMode(false);
+        setReceivedFiles([]);
         cleanupSocketReceiver();
-    }, [cleanupSocketReceiver]);
+    }, [resetForNext, cleanupSocketReceiver]);
 
     return {
         transferState,
         progress,
         transferResult,
         isRelayMode,
+        receivedFiles,
         startSending,
         startSendingViaSocket,
         startReceiving,
         startReceivingViaSocket,
         cleanupSocketReceiver,
+        resetForNext,
         resetTransfer
     };
 }
