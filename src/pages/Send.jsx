@@ -7,7 +7,7 @@ import DropZone from '../components/DropZone';
 import RoomCodeDisplay from '../components/RoomCodeDisplay';
 import TransferProgress from '../components/TransferProgress';
 import ConnectionStatus from '../components/ConnectionStatus';
-import { CONNECTION_STATES } from '../utils/constants';
+import { CONNECTION_STATES, WEBRTC_TIMEOUT } from '../utils/constants';
 
 export default function Send() {
     const navigate = useNavigate();
@@ -15,6 +15,8 @@ export default function Send() {
     const [roomId, setRoomId] = useState(null);
     const [status, setStatus] = useState(CONNECTION_STATES.IDLE);
     const fileRef = useRef(null);
+    const webrtcTimeoutRef = useRef(null);
+    const hasStartedTransfer = useRef(false);
 
     const { socket, isConnected, emit, on } = useSocket();
     const {
@@ -30,7 +32,9 @@ export default function Send() {
         transferState,
         progress,
         transferResult,
-        startSending
+        isRelayMode,
+        startSending,
+        startSendingViaSocket
     } = useFileTransfer();
 
     useEffect(() => {
@@ -38,9 +42,23 @@ export default function Send() {
     }, [file]);
 
     const handleAbort = () => {
+        if (webrtcTimeoutRef.current) clearTimeout(webrtcTimeoutRef.current);
         cleanup();
         navigate('/');
     };
+
+    // Fallback to socket relay
+    const fallbackToRelay = useCallback(() => {
+        if (hasStartedTransfer.current) return;
+        hasStartedTransfer.current = true;
+
+        console.log('[Send] WebRTC failed, falling back to Socket relay...');
+        setStatus(CONNECTION_STATES.RELAY_TRANSFERRING);
+
+        if (socket && fileRef.current) {
+            startSendingViaSocket(socket, fileRef.current);
+        }
+    }, [socket, startSendingViaSocket]);
 
     const handleFileSelected = useCallback(async (selectedFile) => {
         if (!selectedFile) {
@@ -51,6 +69,7 @@ export default function Send() {
         }
 
         setFile(selectedFile);
+        hasStartedTransfer.current = false;
 
         try {
             const response = await emit('create-room', {
@@ -73,18 +92,30 @@ export default function Send() {
         const handlePeerJoined = async () => {
             console.log('[Send] Peer joined! Starting WebRTC...');
             setStatus(CONNECTION_STATES.CONNECTING);
+            hasStartedTransfer.current = false;
 
             try {
                 await startAsSender();
+
+                // Set timeout: if data channel doesn't open, fallback to relay
+                webrtcTimeoutRef.current = setTimeout(() => {
+                    if (!hasStartedTransfer.current) {
+                        console.log('[Send] WebRTC timeout, switching to relay...');
+                        fallbackToRelay();
+                    }
+                }, WEBRTC_TIMEOUT);
             } catch (err) {
                 console.error('Failed to start WebRTC:', err);
-                setStatus(CONNECTION_STATES.ERROR);
+                fallbackToRelay();
             }
         };
 
         const cleanup1 = on('peer-joined', handlePeerJoined);
-        return cleanup1;
-    }, [socket, on, startAsSender]);
+        return () => {
+            cleanup1();
+            if (webrtcTimeoutRef.current) clearTimeout(webrtcTimeoutRef.current);
+        };
+    }, [socket, on, startAsSender, fallbackToRelay]);
 
     useEffect(() => {
         if (!socket) return;
@@ -108,9 +139,13 @@ export default function Send() {
         };
     }, [socket, on, onAnswer, onIceCandidate]);
 
+    // WebRTC success path: data channel opened
     useEffect(() => {
-        if (dataChannelOpen && dataChannel && fileRef.current) {
-            console.log('[Send] DataChannel open! Sending file...');
+        if (dataChannelOpen && dataChannel && fileRef.current && !hasStartedTransfer.current) {
+            hasStartedTransfer.current = true;
+            if (webrtcTimeoutRef.current) clearTimeout(webrtcTimeoutRef.current);
+
+            console.log('[Send] DataChannel open! Sending file via WebRTC...');
             setStatus(CONNECTION_STATES.TRANSFERRING);
             startSending(dataChannel, fileRef.current);
         }
@@ -122,12 +157,20 @@ export default function Send() {
         }
     }, [transferState]);
 
+    // Watch for WebRTC connection failure to trigger relay
+    useEffect(() => {
+        if (connectionState === CONNECTION_STATES.DISCONNECTED && !hasStartedTransfer.current) {
+            fallbackToRelay();
+        }
+    }, [connectionState, fallbackToRelay]);
+
     const showDropZone = !roomId;
     const showRoomCode = roomId && status === CONNECTION_STATES.WAITING;
     const showProgress = [
         CONNECTION_STATES.CONNECTING,
         CONNECTION_STATES.CONNECTED,
         CONNECTION_STATES.TRANSFERRING,
+        CONNECTION_STATES.RELAY_TRANSFERRING,
         CONNECTION_STATES.COMPLETED
     ].includes(status);
 
@@ -139,7 +182,7 @@ export default function Send() {
             <div className="flex items-center justify-between border-b-2 border-retro-shadow/30 pb-4 mt-8">
                 <div className="flex items-center gap-4">
                     <h1 className="text-xl font-dos font-bold text-retro-text uppercase">HOST SESSION</h1>
-                    {[CONNECTION_STATES.WAITING, CONNECTION_STATES.CONNECTING, CONNECTION_STATES.TRANSFERRING].includes(status) && (
+                    {[CONNECTION_STATES.WAITING, CONNECTION_STATES.CONNECTING, CONNECTION_STATES.TRANSFERRING, CONNECTION_STATES.RELAY_TRANSFERRING].includes(status) && (
                         <button
                             onClick={handleAbort}
                             className="bg-red-600/10 text-red-600 border border-red-600 font-dos text-[10px] px-3 py-1 uppercase transition-transform active:translate-y-[2px] active:translate-x-[2px] shadow-sm hover:bg-red-600 hover:text-white"
@@ -150,6 +193,12 @@ export default function Send() {
                 </div>
                 <ConnectionStatus state={status} />
             </div>
+
+            {isRelayMode && (
+                <div className="bg-amber-100 border border-amber-400 p-3 text-center font-dos text-[10px] text-amber-800 uppercase">
+                    ⚡ RELAY MODE — File routed via server (WebRTC unavailable)
+                </div>
+            )}
 
             <DropZone
                 onFileSelected={handleFileSelected}
@@ -187,6 +236,7 @@ export default function Send() {
                             setFile(null);
                             setRoomId(null);
                             setStatus(CONNECTION_STATES.IDLE);
+                            hasStartedTransfer.current = false;
                         }}
                         className="bg-retro-text text-white font-dos text-xs px-6 py-3 uppercase shadow-brutal-sm active:translate-y-1 active:translate-x-1 active:shadow-brutal-active hover:bg-black"
                     >
@@ -204,6 +254,7 @@ export default function Send() {
                             setFile(null);
                             setRoomId(null);
                             setStatus(CONNECTION_STATES.IDLE);
+                            hasStartedTransfer.current = false;
                         }}
                         className="bg-retro-text text-white font-dos text-xs px-6 py-3 uppercase shadow-brutal-sm active:translate-y-1 active:translate-x-1 active:shadow-brutal-active hover:bg-black"
                     >

@@ -17,6 +17,12 @@ const STATUS_CONFIG = {
     [CONNECTION_STATES.TRANSFERRING]: {
         icon: Wifi, color: 'text-retro-amber animate-pulse', label: 'TRANSMITTING...'
     },
+    [CONNECTION_STATES.RELAY_CONNECTING]: {
+        icon: Loader2, color: 'text-orange-500', label: 'RELAY CONNECTING...', animate: true
+    },
+    [CONNECTION_STATES.RELAY_TRANSFERRING]: {
+        icon: Wifi, color: 'text-orange-500 animate-pulse', label: 'RELAY TRANSFER...'
+    },
     [CONNECTION_STATES.COMPLETED]: {
         icon: Check, color: 'text-retro-olive', label: 'SEQUENCE COMPLETE.'
     },

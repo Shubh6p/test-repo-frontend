@@ -1,12 +1,15 @@
-import { CHUNK_SIZE, BUFFER_THRESHOLD } from '../utils/constants';
+import { CHUNK_SIZE, BUFFER_THRESHOLD, BUFFER_LOW_THRESHOLD } from '../utils/constants';
 
-// SENDER: Send file in chunks
+// SENDER: Send file in chunks with event-driven backpressure
 export function sendFile(dataChannel, file, onProgress) {
     return new Promise((resolve, reject) => {
         const totalChunks = Math.ceil(file.size / CHUNK_SIZE);
         let currentChunk = 0;
         let bytesSent = 0;
         const startTime = Date.now();
+
+        // Configure event-driven backpressure
+        dataChannel.bufferedAmountLowThreshold = BUFFER_LOW_THRESHOLD;
 
         // Step 1: Send metadata
         const metadata = JSON.stringify({
@@ -22,6 +25,7 @@ export function sendFile(dataChannel, file, onProgress) {
         // Step 2: Read and send chunks
         const fileReader = new FileReader();
         let offset = 0;
+        let paused = false;
 
         function readNextChunk() {
             if (offset >= file.size) {
@@ -37,15 +41,29 @@ export function sendFile(dataChannel, file, onProgress) {
                 return;
             }
 
-            // Handle backpressure heavily
-            if (dataChannel.bufferedAmount > BUFFER_THRESHOLD) {
-                setTimeout(readNextChunk, 50);
+            // Guard: ensure channel is still open
+            if (dataChannel.readyState !== 'open') {
+                reject(new Error('DataChannel closed unexpectedly'));
                 return;
+            }
+
+            // Event-driven backpressure: if buffer is full, pause and wait for drain event
+            if (dataChannel.bufferedAmount > BUFFER_THRESHOLD) {
+                paused = true;
+                return; // onbufferedamountlow will resume
             }
 
             const slice = file.slice(offset, offset + CHUNK_SIZE);
             fileReader.readAsArrayBuffer(slice);
         }
+
+        // Resume sending when buffer drains
+        dataChannel.onbufferedamountlow = () => {
+            if (paused) {
+                paused = false;
+                readNextChunk();
+            }
+        };
 
         fileReader.onload = (event) => {
             try {
@@ -74,9 +92,8 @@ export function sendFile(dataChannel, file, onProgress) {
                     totalChunks
                 });
 
-                // Crucial fix: always yield to the event loop to prevent 100% thread lock
-                // and to avoid flooding the SCTP socket directly to MTU burst limits
-                setTimeout(readNextChunk, 2);
+                // Yield to event loop then continue
+                setTimeout(readNextChunk, 0);
             } catch (err) {
                 reject(err);
             }
@@ -104,20 +121,23 @@ export class FileReceiver {
     handleData(data) {
         // JSON string = control message
         if (typeof data === 'string') {
-            const message = JSON.parse(data);
+            try {
+                const message = JSON.parse(data);
 
-            if (message.type === 'metadata') {
-                this.metadata = message;
-                this.startTime = Date.now();
-                console.log('[FileReceiver] Metadata:', message);
-                return;
+                if (message.type === 'metadata') {
+                    this.metadata = message;
+                    this.startTime = Date.now();
+                    console.log('[FileReceiver] Metadata:', message);
+                    return;
+                }
+
+                if (message.type === 'complete') {
+                    this.assembleAndDownload();
+                    return;
+                }
+            } catch (e) {
+                console.error('[FileReceiver] Failed to parse message:', e);
             }
-
-            if (message.type === 'complete') {
-                this.assembleAndDownload();
-                return;
-            }
-
             return;
         }
 

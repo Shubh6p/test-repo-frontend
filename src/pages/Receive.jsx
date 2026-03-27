@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { useSocket } from '../hooks/useSocket';
 import { useWebRTC } from '../hooks/useWebRTC';
@@ -7,7 +7,7 @@ import RoomCodeInput from '../components/RoomCodeInput';
 import FileInfo from '../components/FileInfo';
 import TransferProgress from '../components/TransferProgress';
 import ConnectionStatus from '../components/ConnectionStatus';
-import { CONNECTION_STATES } from '../utils/constants';
+import { CONNECTION_STATES, WEBRTC_TIMEOUT } from '../utils/constants';
 
 export default function Receive() {
     const location = useLocation();
@@ -24,11 +24,14 @@ export default function Receive() {
     const [fileInfo, setFileInfo] = useState(null);
     const [error, setError] = useState('');
     const [joinLoading, setJoinLoading] = useState(false);
+    const webrtcTimeoutRef = useRef(null);
+    const hasStartedReceiving = useRef(false);
 
     const { socket, isConnected, emit, on } = useSocket();
     const {
         dataChannel,
         dataChannelOpen,
+        connectionState,
         startAsReceiver,
         onAnswer,
         onIceCandidate,
@@ -38,28 +41,55 @@ export default function Receive() {
         transferState,
         progress,
         transferResult,
-        startReceiving
+        isRelayMode,
+        startReceiving,
+        startReceivingViaSocket,
+        cleanupSocketReceiver
     } = useFileTransfer();
 
     const handleAbort = () => {
+        if (webrtcTimeoutRef.current) clearTimeout(webrtcTimeoutRef.current);
         cleanup();
+        cleanupSocketReceiver();
         navigate('/');
     };
+
+    // Fallback to socket relay receiver
+    const fallbackToRelay = useCallback(() => {
+        if (hasStartedReceiving.current) return;
+        hasStartedReceiving.current = true;
+
+        console.log('[Receive] WebRTC failed, falling back to Socket relay...');
+        setStatus(CONNECTION_STATES.RELAY_TRANSFERRING);
+
+        if (socket) {
+            startReceivingViaSocket(socket);
+        }
+    }, [socket, startReceivingViaSocket]);
 
     const handleJoinRoom = useCallback(async (code) => {
         setJoinLoading(true);
         setError('');
+        hasStartedReceiving.current = false;
 
         try {
             const response = await emit('join-room', code);
             setFileInfo(response.fileInfo);
             setStatus(CONNECTION_STATES.CONNECTING);
+
+            // Set timeout: if WebRTC doesn't connect, fallback to relay
+            webrtcTimeoutRef.current = setTimeout(() => {
+                if (!hasStartedReceiving.current) {
+                    console.log('[Receive] WebRTC timeout, switching to relay...');
+                    fallbackToRelay();
+                }
+            }, WEBRTC_TIMEOUT);
         } catch (err) {
             setError(err.message);
         } finally {
             setJoinLoading(false);
         }
-    }, [emit]);
+    }, [emit, fallbackToRelay]);
 
     useEffect(() => {
         if (!socket) return;
@@ -70,7 +100,7 @@ export default function Receive() {
                 await startAsReceiver(data.offer);
             } catch (err) {
                 console.error('Failed to handle offer:', err);
-                setStatus(CONNECTION_STATES.ERROR);
+                fallbackToRelay();
             }
         });
 
@@ -86,12 +116,17 @@ export default function Receive() {
             cleanupOffer();
             cleanupIce();
             cleanupDisconnect();
+            if (webrtcTimeoutRef.current) clearTimeout(webrtcTimeoutRef.current);
         };
-    }, [socket, on, startAsReceiver, onIceCandidate]);
+    }, [socket, on, startAsReceiver, onIceCandidate, fallbackToRelay]);
 
+    // WebRTC success path
     useEffect(() => {
-        if (dataChannelOpen && dataChannel) {
-            console.log('[Receive] DataChannel open! Ready to receive...');
+        if (dataChannelOpen && dataChannel && !hasStartedReceiving.current) {
+            hasStartedReceiving.current = true;
+            if (webrtcTimeoutRef.current) clearTimeout(webrtcTimeoutRef.current);
+
+            console.log('[Receive] DataChannel open! Ready to receive via WebRTC...');
             setStatus(CONNECTION_STATES.TRANSFERRING);
             startReceiving(dataChannel);
         }
@@ -103,10 +138,18 @@ export default function Receive() {
         }
     }, [transferState]);
 
+    // Watch for WebRTC failure to trigger relay
+    useEffect(() => {
+        if (connectionState === CONNECTION_STATES.DISCONNECTED && !hasStartedReceiving.current) {
+            fallbackToRelay();
+        }
+    }, [connectionState, fallbackToRelay]);
+
     const showInput = status === CONNECTION_STATES.IDLE;
     const showProgress = [
         CONNECTION_STATES.CONNECTING,
         CONNECTION_STATES.TRANSFERRING,
+        CONNECTION_STATES.RELAY_TRANSFERRING,
         CONNECTION_STATES.COMPLETED
     ].includes(status);
 
@@ -118,7 +161,7 @@ export default function Receive() {
             <div className="flex items-center justify-between border-b-2 border-retro-shadow/30 pb-4 mt-8">
                 <div className="flex items-center gap-4">
                     <h1 className="text-xl font-dos font-bold text-retro-text uppercase">JOIN SESSION</h1>
-                    {[CONNECTION_STATES.CONNECTING, CONNECTION_STATES.TRANSFERRING].includes(status) && (
+                    {[CONNECTION_STATES.CONNECTING, CONNECTION_STATES.TRANSFERRING, CONNECTION_STATES.RELAY_TRANSFERRING].includes(status) && (
                         <button
                             onClick={handleAbort}
                             className="bg-red-600/10 text-red-600 border border-red-600 font-dos text-[10px] px-3 py-1 uppercase transition-transform active:translate-y-[2px] active:translate-x-[2px] shadow-sm hover:bg-red-600 hover:text-white"
@@ -129,6 +172,12 @@ export default function Receive() {
                 </div>
                 <ConnectionStatus state={status} />
             </div>
+
+            {isRelayMode && (
+                <div className="bg-amber-100 border border-amber-400 p-3 text-center font-dos text-[10px] text-amber-800 uppercase">
+                    ⚡ RELAY MODE — File routed via server (WebRTC unavailable)
+                </div>
+            )}
 
             {showInput && (
                 <RoomCodeInput
@@ -169,9 +218,11 @@ export default function Receive() {
                     <button
                         onClick={() => {
                             cleanup();
+                            cleanupSocketReceiver();
                             setFileInfo(null);
                             setError('');
                             setStatus(CONNECTION_STATES.IDLE);
+                            hasStartedReceiving.current = false;
                         }}
                         className="bg-retro-text text-white font-dos text-xs px-6 py-3 uppercase shadow-brutal-sm active:translate-y-1 active:translate-x-1 active:shadow-brutal-active hover:bg-black"
                     >
@@ -186,9 +237,11 @@ export default function Receive() {
                     <button
                         onClick={() => {
                             cleanup();
+                            cleanupSocketReceiver();
                             setFileInfo(null);
                             setError('');
                             setStatus(CONNECTION_STATES.IDLE);
+                            hasStartedReceiving.current = false;
                         }}
                         className="bg-retro-text text-white font-dos text-xs px-6 py-3 uppercase shadow-brutal-sm active:translate-y-1 active:translate-x-1 active:shadow-brutal-active hover:bg-black"
                     >
