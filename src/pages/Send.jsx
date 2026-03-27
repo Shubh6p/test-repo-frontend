@@ -24,6 +24,7 @@ export default function Send() {
     const fileRef = useRef(null);
     const webrtcTimeoutRef = useRef(null);
     const hasStartedTransfer = useRef(false);
+    const dataChannelOpenRef = useRef(false);
 
     const { socket, isConnected, emit, on } = useSocket();
     const {
@@ -49,6 +50,11 @@ export default function Send() {
     useEffect(() => {
         fileRef.current = file;
     }, [file]);
+
+    // Keep ref in sync with state so timeout closures read current value
+    useEffect(() => {
+        dataChannelOpenRef.current = dataChannelOpen;
+    }, [dataChannelOpen]);
 
     const handleAbort = () => {
         if (webrtcTimeoutRef.current) clearTimeout(webrtcTimeoutRef.current);
@@ -97,7 +103,9 @@ export default function Send() {
                 await startAsSender();
 
                 webrtcTimeoutRef.current = setTimeout(() => {
-                    if (!dataChannelOpen) {
+                    // Use ref (not state) to avoid stale closure
+                    if (!dataChannelOpenRef.current) {
+                        console.log('[Send] WebRTC timeout, data channel not open');
                         fallbackToRelay();
                     }
                 }, WEBRTC_TIMEOUT);
@@ -112,7 +120,7 @@ export default function Send() {
             cleanup1();
             if (webrtcTimeoutRef.current) clearTimeout(webrtcTimeoutRef.current);
         };
-    }, [socket, on, startAsSender, fallbackToRelay, dataChannelOpen]);
+    }, [socket, on, startAsSender, fallbackToRelay]);
 
     useEffect(() => {
         if (!socket) return;
