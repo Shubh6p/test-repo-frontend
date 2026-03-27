@@ -37,7 +37,7 @@ export function sendFile(dataChannel, file, onProgress) {
                 return;
             }
 
-            // Handle backpressure
+            // Handle backpressure heavily
             if (dataChannel.bufferedAmount > BUFFER_THRESHOLD) {
                 setTimeout(readNextChunk, 50);
                 return;
@@ -49,6 +49,11 @@ export function sendFile(dataChannel, file, onProgress) {
 
         fileReader.onload = (event) => {
             try {
+                if (dataChannel.readyState !== 'open') {
+                    reject(new Error('DataChannel closed unexpectedly'));
+                    return;
+                }
+
                 dataChannel.send(event.target.result);
 
                 bytesSent += event.target.result.byteLength;
@@ -69,7 +74,9 @@ export function sendFile(dataChannel, file, onProgress) {
                     totalChunks
                 });
 
-                readNextChunk();
+                // Crucial fix: always yield to the event loop to prevent 100% thread lock
+                // and to avoid flooding the SCTP socket directly to MTU burst limits
+                setTimeout(readNextChunk, 2);
             } catch (err) {
                 reject(err);
             }

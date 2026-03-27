@@ -1,6 +1,6 @@
-export const CHUNK_SIZE = 16 * 1024; // 16KB per chunk (Maximum optimal compatibility size for cross-network WebRTC)
+export const CHUNK_SIZE = 8 * 1024; // 8KB per chunk (Bulletproof safe limit for strict TURN relays/Safari bugs)
 
-export const BUFFER_THRESHOLD = 64 * 1024; // 64KB Buffer Bloat Prevention
+export const BUFFER_THRESHOLD = 32 * 1024; // 32KB Buffer Bloat Prevention
 
 export const ICE_SERVERS = {
     iceServers: [
