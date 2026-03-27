@@ -3,22 +3,23 @@ import { useNavigate } from 'react-router-dom';
 import { useSocket } from '../hooks/useSocket';
 import { useWebRTC } from '../hooks/useWebRTC';
 import { useFileTransfer } from '../hooks/useFileTransfer';
+import { useToast } from '../hooks/useToast';
 import DropZone from '../components/DropZone';
 import RoomCodeDisplay from '../components/RoomCodeDisplay';
 import TransferProgress from '../components/TransferProgress';
 import ConnectionStatus from '../components/ConnectionStatus';
+import SentFileCard from '../components/SentFileCard';
+import ToastContainer from '../components/Toast';
 import { CONNECTION_STATES, WEBRTC_TIMEOUT } from '../utils/constants';
 
 export default function Send() {
     const navigate = useNavigate();
+    const toast = useToast();
 
-    // Session state
     const [roomId, setRoomId] = useState(null);
     const [status, setStatus] = useState(CONNECTION_STATES.IDLE);
     const [peerConnected, setPeerConnected] = useState(false);
-    const [transferCount, setTransferCount] = useState(0);
 
-    // File state (per-transfer, resets for each new file)
     const [file, setFile] = useState(null);
     const fileRef = useRef(null);
     const webrtcTimeoutRef = useRef(null);
@@ -39,6 +40,7 @@ export default function Send() {
         progress,
         transferResult,
         isRelayMode,
+        sentFiles,
         startSending,
         startSendingViaSocket,
         resetForNext
@@ -51,37 +53,38 @@ export default function Send() {
     const handleAbort = () => {
         if (webrtcTimeoutRef.current) clearTimeout(webrtcTimeoutRef.current);
         cleanup();
-        navigate('/');
+        toast.warning('SESSION TERMINATED');
+        setTimeout(() => navigate('/'), 300);
     };
 
-    // Step 1: Create room immediately (no file required)
+    // Step 1: Create room immediately
     const handleCreateRoom = useCallback(async () => {
         try {
             const response = await emit('create-room', null);
             setRoomId(response.roomId);
             setStatus(CONNECTION_STATES.WAITING);
+            toast.info('ROOM CREATED — SHARE THE CODE');
         } catch (err) {
             console.error('Failed to create room:', err);
             setStatus(CONNECTION_STATES.ERROR);
+            toast.error('FAILED TO CREATE ROOM');
         }
-    }, [emit]);
+    }, [emit, toast]);
 
-    // Auto-create room on mount
     useEffect(() => {
         if (isConnected && !roomId) {
             handleCreateRoom();
         }
     }, [isConnected, roomId, handleCreateRoom]);
 
-    // Fallback to socket relay
     const fallbackToRelay = useCallback(() => {
         if (hasStartedTransfer.current) return;
         console.log('[Send] WebRTC failed, falling back to Socket relay...');
         setPeerConnected(true);
         setStatus(CONNECTION_STATES.CONNECTED);
-    }, []);
+        toast.warning('USING RELAY MODE');
+    }, [toast]);
 
-    // Step 2: Peer joins → start WebRTC
     useEffect(() => {
         if (!socket) return;
 
@@ -95,7 +98,6 @@ export default function Send() {
 
                 webrtcTimeoutRef.current = setTimeout(() => {
                     if (!dataChannelOpen) {
-                        console.log('[Send] WebRTC timeout, falling back...');
                         fallbackToRelay();
                     }
                 }, WEBRTC_TIMEOUT);
@@ -112,21 +114,15 @@ export default function Send() {
         };
     }, [socket, on, startAsSender, fallbackToRelay, dataChannelOpen]);
 
-    // Signal handlers
     useEffect(() => {
         if (!socket) return;
 
-        const cleanupAnswer = on('signal-answer', (data) => {
-            onAnswer(data.answer);
-        });
-
-        const cleanupIce = on('signal-ice-candidate', (data) => {
-            onIceCandidate(data.candidate);
-        });
-
+        const cleanupAnswer = on('signal-answer', (data) => onAnswer(data.answer));
+        const cleanupIce = on('signal-ice-candidate', (data) => onIceCandidate(data.candidate));
         const cleanupDisconnect = on('peer-disconnected', () => {
             setPeerConnected(false);
             setStatus(CONNECTION_STATES.DISCONNECTED);
+            toast.error('PEER DISCONNECTED');
         });
 
         return () => {
@@ -134,26 +130,23 @@ export default function Send() {
             cleanupIce();
             cleanupDisconnect();
         };
-    }, [socket, on, onAnswer, onIceCandidate]);
+    }, [socket, on, onAnswer, onIceCandidate, toast]);
 
-    // WebRTC success: data channel opened
     useEffect(() => {
         if (dataChannelOpen && dataChannel) {
             if (webrtcTimeoutRef.current) clearTimeout(webrtcTimeoutRef.current);
-            console.log('[Send] DataChannel open! Peer connected.');
             setPeerConnected(true);
             setStatus(CONNECTION_STATES.CONNECTED);
+            toast.success('PEER CONNECTED — SECURE TUNNEL ACTIVE');
         }
-    }, [dataChannelOpen, dataChannel]);
+    }, [dataChannelOpen, dataChannel, toast]);
 
-    // Watch for connection failure
     useEffect(() => {
         if (connectionState === CONNECTION_STATES.DISCONNECTED && !peerConnected) {
             fallbackToRelay();
         }
     }, [connectionState, fallbackToRelay, peerConnected]);
 
-    // Step 3: User selects a file & send it
     const handleFileSelected = useCallback((selectedFile) => {
         if (!selectedFile) {
             setFile(null);
@@ -166,23 +159,22 @@ export default function Send() {
         if (!file) return;
         hasStartedTransfer.current = true;
         setStatus(CONNECTION_STATES.TRANSFERRING);
+        toast.info('TRANSMITTING DATABLOCK...');
 
         if (dataChannelOpen && dataChannel) {
             startSending(dataChannel, file);
         } else if (socket) {
             startSendingViaSocket(socket, file);
         }
-    }, [file, dataChannelOpen, dataChannel, socket, startSending, startSendingViaSocket]);
+    }, [file, dataChannelOpen, dataChannel, socket, startSending, startSendingViaSocket, toast]);
 
-    // Step 4: Transfer complete
     useEffect(() => {
         if (transferState === CONNECTION_STATES.COMPLETED) {
             setStatus(CONNECTION_STATES.COMPLETED);
-            setTransferCount(prev => prev + 1);
+            toast.success('FILE TRANSMITTED SUCCESSFULLY');
         }
-    }, [transferState]);
+    }, [transferState, toast]);
 
-    // Send another file
     const handleSendMore = () => {
         setFile(null);
         fileRef.current = null;
@@ -191,142 +183,145 @@ export default function Send() {
         setStatus(CONNECTION_STATES.CONNECTED);
     };
 
-    // UI Phases
     const isWaiting = !peerConnected && status === CONNECTION_STATES.WAITING;
     const isConnecting = !peerConnected && status === CONNECTION_STATES.CONNECTING;
     const isReady = peerConnected && !file && transferState !== CONNECTION_STATES.COMPLETED;
-    const hasFile = peerConnected && file && transferState !== CONNECTION_STATES.TRANSFERRING && transferState !== CONNECTION_STATES.RELAY_TRANSFERRING && transferState !== CONNECTION_STATES.COMPLETED;
+    const hasFile = peerConnected && file && ![CONNECTION_STATES.TRANSFERRING, CONNECTION_STATES.RELAY_TRANSFERRING, CONNECTION_STATES.COMPLETED].includes(transferState);
     const isTransferring = [CONNECTION_STATES.TRANSFERRING, CONNECTION_STATES.RELAY_TRANSFERRING].includes(transferState) && transferState !== CONNECTION_STATES.COMPLETED;
     const isComplete = transferState === CONNECTION_STATES.COMPLETED;
 
     return (
-        <div className="bg-retro-card shadow-brutal border border-retro-shadow/20 p-6 md:p-10 space-y-8 max-w-2xl mx-auto relative mt-4">
-            <div className="absolute top-0 left-6 w-16 h-8 bg-gray-200 border-x-2 border-b-2 border-gray-300"></div>
+        <>
+            <ToastContainer toasts={toast.toasts} />
+            <div className="bg-retro-card shadow-brutal border border-retro-shadow/20 p-6 md:p-10 space-y-8 max-w-2xl mx-auto relative mt-4 animate-slide-up">
+                <div className="absolute top-0 left-6 w-16 h-8 bg-gray-200 border-x-2 border-b-2 border-gray-300"></div>
 
-            <div className="flex items-center justify-between border-b-2 border-retro-shadow/30 pb-4 mt-8">
-                <div className="flex items-center gap-4">
-                    <h1 className="text-xl font-dos font-bold text-retro-text uppercase">HOST SESSION</h1>
-                    {![CONNECTION_STATES.IDLE, CONNECTION_STATES.COMPLETED, CONNECTION_STATES.DISCONNECTED, CONNECTION_STATES.ERROR].includes(status) && (
+                <div className="flex items-center justify-between border-b-2 border-retro-shadow/30 pb-4 mt-8">
+                    <div className="flex items-center gap-4">
+                        <h1 className="text-xl font-dos font-bold text-retro-text uppercase">HOST SESSION</h1>
+                        {![CONNECTION_STATES.IDLE, CONNECTION_STATES.COMPLETED, CONNECTION_STATES.DISCONNECTED, CONNECTION_STATES.ERROR].includes(status) && (
+                            <button
+                                onClick={handleAbort}
+                                className="bg-red-600/10 text-red-600 border border-red-600 font-dos text-[10px] px-3 py-1 uppercase transition-all duration-150 active:translate-y-[2px] active:translate-x-[2px] shadow-sm hover:bg-red-600 hover:text-white"
+                            >
+                                ABORT
+                            </button>
+                        )}
+                    </div>
+                    <ConnectionStatus state={status} />
+                </div>
+
+                {isRelayMode && (
+                    <div className="bg-amber-100 border border-amber-400 p-3 text-center font-dos text-[10px] text-amber-800 uppercase animate-fade-in">
+                        ⚡ RELAY MODE — File routed via server
+                    </div>
+                )}
+
+                {/* Phase 1: Waiting */}
+                {(isWaiting || isConnecting) && roomId && (
+                    <div className="animate-pop-in">
+                        <RoomCodeDisplay roomId={roomId} />
+                    </div>
+                )}
+
+                {/* Phase 2: Connected, select file */}
+                {isReady && (
+                    <div className="space-y-4 animate-slide-up">
+                        <div className="bg-retro-olive/10 border border-retro-olive p-4 text-center font-dos text-xs text-retro-olive uppercase">
+                            ✓ PEER CONNECTED — SELECT A FILE TO TRANSMIT
+                            <span className="animate-cursor-blink ml-1">▌</span>
+                        </div>
+                        <DropZone onFileSelected={handleFileSelected} selectedFile={null} disabled={false} />
+                    </div>
+                )}
+
+                {/* Phase 2b: File selected */}
+                {hasFile && (
+                    <div className="space-y-4 animate-slide-up">
+                        <DropZone onFileSelected={handleFileSelected} selectedFile={file} disabled={false} />
                         <button
-                            onClick={handleAbort}
-                            className="bg-red-600/10 text-red-600 border border-red-600 font-dos text-[10px] px-3 py-1 uppercase transition-transform active:translate-y-[2px] active:translate-x-[2px] shadow-sm hover:bg-red-600 hover:text-white"
+                            onClick={handleSendFile}
+                            className="w-full bg-retro-olive text-white font-dos text-sm py-4 uppercase shadow-brutal transition-all duration-150 active:translate-y-1 active:translate-x-1 active:shadow-brutal-active hover:bg-retro-olive/80"
                         >
-                            ABORT
+                            ▸ TRANSMIT DATABLOCK
                         </button>
-                    )}
-                </div>
-                <ConnectionStatus state={status} />
-            </div>
-
-            {isRelayMode && (
-                <div className="bg-amber-100 border border-amber-400 p-3 text-center font-dos text-[10px] text-amber-800 uppercase">
-                    ⚡ RELAY MODE — File routed via server (WebRTC unavailable)
-                </div>
-            )}
-
-            {/* Phase 1: Waiting for peer */}
-            {(isWaiting || isConnecting) && roomId && (
-                <RoomCodeDisplay roomId={roomId} />
-            )}
-
-            {/* Phase 2: Peer connected, select file */}
-            {isReady && (
-                <div className="space-y-4">
-                    <div className="bg-retro-olive/10 border border-retro-olive p-4 text-center font-dos text-xs text-retro-olive uppercase">
-                        ✓ PEER CONNECTED — SELECT A FILE TO TRANSMIT
                     </div>
-                    <DropZone
-                        onFileSelected={handleFileSelected}
-                        selectedFile={null}
-                        disabled={false}
-                    />
-                </div>
-            )}
+                )}
 
-            {/* Phase 2b: File selected, ready to send */}
-            {hasFile && (
-                <div className="space-y-4">
-                    <DropZone
-                        onFileSelected={handleFileSelected}
-                        selectedFile={file}
-                        disabled={false}
-                    />
-                    <button
-                        onClick={handleSendFile}
-                        className="w-full bg-retro-olive text-white font-dos text-sm py-4 uppercase shadow-brutal active:translate-y-1 active:translate-x-1 active:shadow-brutal-active hover:bg-retro-olive/80 transition-colors"
-                    >
-                        ▸ TRANSMIT DATABLOCK
-                    </button>
-                </div>
-            )}
-
-            {/* Phase 3: Transferring */}
-            {isTransferring && file && (
-                <TransferProgress
-                    progress={progress}
-                    state={transferState}
-                    fileName={file.name}
-                />
-            )}
-
-            {/* Phase 4: Complete */}
-            {isComplete && (
-                <div className="space-y-4">
-                    <div className="text-center p-6 bg-retro-input border border-retro-shadow shadow-brutal">
-                        <p className="text-retro-text text-lg font-dos mb-2 font-bold uppercase">
-                            FILE UPLOAD COMPLETE
-                        </p>
-                        <p className="text-retro-gray text-xs font-mono uppercase">
-                            {transferCount} file{transferCount > 1 ? 's' : ''} transmitted this session
-                        </p>
+                {/* Phase 3: Transferring */}
+                {isTransferring && file && (
+                    <div className="animate-fade-in">
+                        <TransferProgress progress={progress} state={transferState} fileName={file.name} />
                     </div>
-                    <button
-                        onClick={handleSendMore}
-                        className="w-full bg-retro-amber text-retro-terminal font-dos text-sm py-4 uppercase shadow-brutal active:translate-y-1 active:translate-x-1 active:shadow-brutal-active hover:bg-retro-amber/80 transition-colors"
-                    >
-                        ▸ SEND ANOTHER FILE
-                    </button>
-                </div>
-            )}
+                )}
 
-            {status === CONNECTION_STATES.ERROR && (
-                <div className="text-center p-6 bg-red-100 border border-red-300 shadow-brutal mt-4">
-                    <p className="text-red-800 font-dos text-sm mb-4 uppercase">CRITICAL UPLINK FAILURE</p>
-                    <button
-                        onClick={() => {
-                            cleanup();
-                            navigate('/');
-                        }}
-                        className="bg-retro-text text-white font-dos text-xs px-6 py-3 uppercase shadow-brutal-sm active:translate-y-1 active:translate-x-1 active:shadow-brutal-active hover:bg-black"
-                    >
-                        RETURN TO BASE
-                    </button>
-                </div>
-            )}
+                {/* Phase 4: Complete */}
+                {isComplete && (
+                    <div className="space-y-4 animate-pop-in">
+                        <div className="text-center p-6 bg-retro-input border border-retro-shadow shadow-brutal">
+                            <p className="text-retro-text text-lg font-dos mb-2 font-bold uppercase">
+                                FILE TRANSMITTED ✓
+                            </p>
+                            <p className="text-retro-gray text-xs font-mono uppercase">
+                                {sentFiles.length} file{sentFiles.length > 1 ? 's' : ''} sent this session
+                            </p>
+                        </div>
+                        <button
+                            onClick={handleSendMore}
+                            className="w-full bg-retro-amber text-retro-terminal font-dos text-sm py-4 uppercase shadow-brutal transition-all duration-150 active:translate-y-1 active:translate-x-1 active:shadow-brutal-active hover:bg-retro-amber/80"
+                        >
+                            ▸ SEND ANOTHER FILE
+                        </button>
+                    </div>
+                )}
 
-            {status === CONNECTION_STATES.DISCONNECTED && (
-                <div className="text-center p-6 bg-yellow-100 border border-yellow-300 shadow-brutal mt-4">
-                    <p className="text-yellow-800 font-dos text-sm mb-4 uppercase">TARGET DISCONNECTED</p>
-                    <button
-                        onClick={() => {
-                            cleanup();
-                            navigate('/');
-                        }}
-                        className="bg-retro-text text-white font-dos text-xs px-6 py-3 uppercase shadow-brutal-sm active:translate-y-1 active:translate-x-1 active:shadow-brutal-active hover:bg-black"
-                    >
-                        RETURN TO BASE
-                    </button>
-                </div>
-            )}
+                {/* Sent files history */}
+                {sentFiles.length > 0 && (
+                    <div className="space-y-3 animate-fade-in">
+                        <h2 className="font-dos text-xs text-retro-text uppercase font-bold border-b border-retro-shadow/20 pb-2">
+                            TRANSMITTED DATABLOCKS ({sentFiles.length})
+                        </h2>
+                        <div className="space-y-2 animate-stagger">
+                            {sentFiles.map((f) => (
+                                <SentFileCard key={f.id} file={f} />
+                            ))}
+                        </div>
+                    </div>
+                )}
 
-            {/* Footer detail */}
-            <div className="mt-8 pt-4 border-t-2 border-retro-shadow/40 flex justify-between items-end">
-                <div className="font-dos text-[10px] text-retro-gray uppercase">
-                    <div>OPERATION</div>
-                    <div className="text-retro-text">CREATE.BIN</div>
+                {status === CONNECTION_STATES.ERROR && (
+                    <div className="text-center p-6 bg-red-100 border border-red-300 shadow-brutal mt-4 animate-pop-in">
+                        <p className="text-red-800 font-dos text-sm mb-4 uppercase">CRITICAL UPLINK FAILURE</p>
+                        <button onClick={() => { cleanup(); navigate('/'); }}
+                            className="bg-retro-text text-white font-dos text-xs px-6 py-3 uppercase shadow-brutal-sm transition-all duration-150 active:translate-y-1 active:translate-x-1 hover:bg-black">
+                            RETURN TO BASE
+                        </button>
+                    </div>
+                )}
+
+                {status === CONNECTION_STATES.DISCONNECTED && (
+                    <div className="text-center p-6 bg-yellow-100 border border-yellow-300 shadow-brutal mt-4 animate-pop-in">
+                        <p className="text-yellow-800 font-dos text-sm mb-2 uppercase">TARGET DISCONNECTED</p>
+                        {sentFiles.length > 0 && (
+                            <p className="text-yellow-700 font-mono text-[10px] mb-4 uppercase">
+                                {sentFiles.length} file{sentFiles.length > 1 ? 's' : ''} transmitted before disconnect
+                            </p>
+                        )}
+                        <button onClick={() => { cleanup(); navigate('/'); }}
+                            className="bg-retro-text text-white font-dos text-xs px-6 py-3 uppercase shadow-brutal-sm transition-all duration-150 active:translate-y-1 active:translate-x-1 hover:bg-black">
+                            RETURN TO BASE
+                        </button>
+                    </div>
+                )}
+
+                <div className="mt-8 pt-4 border-t-2 border-retro-shadow/40 flex justify-between items-end">
+                    <div className="font-dos text-[10px] text-retro-gray uppercase">
+                        <div>OPERATION</div>
+                        <div className="text-retro-text">CREATE.BIN</div>
+                    </div>
+                    <div className="w-4 h-4 bg-retro-brown"></div>
                 </div>
-                <div className="w-4 h-4 bg-retro-brown"></div>
             </div>
-        </div>
+        </>
     );
 }

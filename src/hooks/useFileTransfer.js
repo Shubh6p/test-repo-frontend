@@ -15,6 +15,7 @@ export function useFileTransfer() {
     const [transferResult, setTransferResult] = useState(null);
     const [isRelayMode, setIsRelayMode] = useState(false);
     const [receivedFiles, setReceivedFiles] = useState([]);
+    const [sentFiles, setSentFiles] = useState([]);
     const fileReceiverRef = useRef(null);
     const socketReceiverRef = useRef(null);
 
@@ -27,6 +28,18 @@ export function useFileTransfer() {
             const result = await sendFile(dataChannel, file, (prog) => {
                 setProgress(prog);
             });
+
+            // Track sent file
+            const sentEntry = {
+                id: Date.now() + '_' + Math.random().toString(36).slice(2, 8),
+                fileName: file.name,
+                totalBytes: file.size,
+                mimeType: file.type,
+                duration: result.duration,
+                speed: result.speed,
+                timestamp: new Date()
+            };
+            setSentFiles(prev => [...prev, sentEntry]);
 
             setTransferState(CONNECTION_STATES.COMPLETED);
             setTransferResult(result);
@@ -47,6 +60,17 @@ export function useFileTransfer() {
                 setProgress(prog);
             });
 
+            const sentEntry = {
+                id: Date.now() + '_' + Math.random().toString(36).slice(2, 8),
+                fileName: file.name,
+                totalBytes: file.size,
+                mimeType: file.type,
+                duration: result.duration,
+                speed: result.speed,
+                timestamp: new Date()
+            };
+            setSentFiles(prev => [...prev, sentEntry]);
+
             setTransferState(CONNECTION_STATES.COMPLETED);
             setTransferResult(result);
             return result;
@@ -56,7 +80,7 @@ export function useFileTransfer() {
         }
     }, []);
 
-    // Handler for when a file is fully received (adds to list, no auto-download)
+    // Handler for file received (adds to list)
     const handleFileComplete = useCallback((result) => {
         const fileEntry = {
             id: Date.now() + '_' + Math.random().toString(36).slice(2, 8),
@@ -122,7 +146,7 @@ export function useFileTransfer() {
         }
     }, []);
 
-    // Reset transfer state for sending another file (keeps receivedFiles)
+    // Reset for sending another file (keeps history)
     const resetForNext = useCallback(() => {
         setTransferState(CONNECTION_STATES.IDLE);
         setProgress({
@@ -135,11 +159,12 @@ export function useFileTransfer() {
         setTransferResult(null);
     }, []);
 
-    // Full reset (clears everything)
+    // Full reset
     const resetTransfer = useCallback(() => {
         resetForNext();
         setIsRelayMode(false);
         setReceivedFiles([]);
+        setSentFiles([]);
         cleanupSocketReceiver();
     }, [resetForNext, cleanupSocketReceiver]);
 
@@ -149,6 +174,7 @@ export function useFileTransfer() {
         transferResult,
         isRelayMode,
         receivedFiles,
+        sentFiles,
         startSending,
         startSendingViaSocket,
         startReceiving,
