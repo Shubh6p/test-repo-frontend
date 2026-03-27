@@ -375,7 +375,7 @@ export default function Send() {
                     <div className="text-center p-6 bg-red-100 border border-red-300 shadow-brutal mt-4 animate-pop-in">
                         <p className="text-red-800 font-dos text-sm mb-4 uppercase">CRITICAL UPLINK FAILURE</p>
                         <div className="flex gap-4 justify-center">
-                            <button onClick={() => { cleanup(); window.location.href = '/'; }}
+                            <button onClick={() => { cleanup(); sessionStorage.removeItem('directdrop_last_room_id'); window.location.href = '/'; }}
                                 className="bg-retro-text text-white font-dos text-xs px-6 py-3 uppercase shadow-brutal-sm transition-all duration-150 active:translate-y-1 active:translate-x-1 hover:bg-black">
                                 RETURN TO BASE
                             </button>
@@ -396,7 +396,7 @@ export default function Send() {
                             </p>
                         )}
                         <div className="flex gap-4 justify-center mt-4">
-                            <button onClick={() => { cleanup(); window.location.href = '/'; }}
+                            <button onClick={() => { cleanup(); sessionStorage.removeItem('directdrop_last_room_id'); window.location.href = '/'; }}
                                 className="bg-retro-text text-white font-dos text-xs px-6 py-3 uppercase shadow-brutal-sm transition-all duration-150 active:translate-y-1 active:translate-x-1 hover:bg-black">
                                 RETURN TO BASE
                             </button>
