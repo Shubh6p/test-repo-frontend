@@ -60,6 +60,7 @@ export default function Send() {
     const handleAbort = () => {
         if (webrtcTimeoutRef.current) clearTimeout(webrtcTimeoutRef.current);
         cleanup();
+        sessionStorage.removeItem('directdrop_last_room_id'); // 1. Clear room history
         if (socket) socket.emit('leave-room');
         toast.warning('SESSION TERMINATED');
         setTimeout(() => navigate('/'), 300);
@@ -67,6 +68,7 @@ export default function Send() {
 
     const handleReconnect = () => {
         cleanup();
+        sessionStorage.removeItem('directdrop_last_room_id'); // 2. Clear before creating new
         setPeerConnected(false);
         setRoomId(null);
         resetForNext();

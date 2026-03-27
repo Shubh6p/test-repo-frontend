@@ -54,6 +54,7 @@ export default function Receive() {
         cleanup();
         cleanupSocketReceiver();
         if (socket) socket.emit('leave-room');
+        sessionStorage.removeItem('directdrop_last_room_id');
         toast.warning('SESSION TERMINATED');
         setTimeout(() => navigate('/'), 300);
     };
@@ -63,6 +64,7 @@ export default function Receive() {
         cleanupSocketReceiver();
         setPeerConnected(false);
         setStatus(CONNECTION_STATES.IDLE);
+        sessionStorage.removeItem('directdrop_last_room_id');
         hasStartedReceiving.current = false;
         toastFiredRef.current.connected = false;
     };
