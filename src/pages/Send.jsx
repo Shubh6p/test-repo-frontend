@@ -238,6 +238,16 @@ export default function Send() {
         setStatus(CONNECTION_STATES.CONNECTED);
     };
 
+    const handleSendAgain = useCallback((rawFile) => {
+        if (!rawFile) return;
+        setFile(rawFile);
+        hasStartedTransfer.current = false;
+        toastFiredRef.current.complete = false;
+        resetForNext();
+        setStatus(CONNECTION_STATES.CONNECTED);
+        toast.info(`READY TO RE-SEND: ${rawFile.name}`);
+    }, [resetForNext, toast]);
+
     const isWaiting = !peerConnected && status === CONNECTION_STATES.WAITING;
     const isConnecting = !peerConnected && status === CONNECTION_STATES.CONNECTING;
     const isReady = peerConnected && !file && transferState !== CONNECTION_STATES.COMPLETED;
@@ -338,7 +348,7 @@ export default function Send() {
                         </h2>
                         <div className="space-y-2 animate-stagger">
                             {sentFiles.map((f) => (
-                                <SentFileCard key={f.id} file={f} />
+                                <SentFileCard key={f.id} file={f} onSendAgain={handleSendAgain} />
                             ))}
                         </div>
                     </div>

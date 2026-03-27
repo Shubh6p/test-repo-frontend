@@ -37,9 +37,10 @@ export function useFileTransfer() {
                 mimeType: file.type,
                 duration: result.duration,
                 speed: result.speed,
-                timestamp: new Date()
+                timestamp: new Date(),
+                rawFile: file // Keep for "Send Again"
             };
-            setSentFiles(prev => [...prev, sentEntry]);
+            setSentFiles(prev => [sentEntry, ...prev]); // Prepend for better UX
 
             setTransferState(CONNECTION_STATES.COMPLETED);
             setTransferResult(result);
@@ -67,9 +68,10 @@ export function useFileTransfer() {
                 mimeType: file.type,
                 duration: result.duration,
                 speed: result.speed,
-                timestamp: new Date()
+                timestamp: new Date(),
+                rawFile: file // Keep for "Send Again"
             };
-            setSentFiles(prev => [...prev, sentEntry]);
+            setSentFiles(prev => [sentEntry, ...prev]);
 
             setTransferState(CONNECTION_STATES.COMPLETED);
             setTransferResult(result);
