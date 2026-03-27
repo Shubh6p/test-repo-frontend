@@ -25,6 +25,7 @@ export default function Send() {
     const webrtcTimeoutRef = useRef(null);
     const hasStartedTransfer = useRef(false);
     const dataChannelOpenRef = useRef(false);
+    const toastFiredRef = useRef({});
 
     const { socket, isConnected, emit, on } = useSocket();
     const {
@@ -75,7 +76,7 @@ export default function Send() {
             setStatus(CONNECTION_STATES.ERROR);
             toast.error('FAILED TO CREATE ROOM');
         }
-    }, [emit, toast]);
+    }, [emit]);
 
     useEffect(() => {
         if (isConnected && !roomId) {
@@ -89,7 +90,7 @@ export default function Send() {
         setPeerConnected(true);
         setStatus(CONNECTION_STATES.CONNECTED);
         toast.warning('USING RELAY MODE');
-    }, [toast]);
+    }, []);
 
     useEffect(() => {
         if (!socket) return;
@@ -138,16 +139,19 @@ export default function Send() {
             cleanupIce();
             cleanupDisconnect();
         };
-    }, [socket, on, onAnswer, onIceCandidate, toast]);
+    }, [socket, on, onAnswer, onIceCandidate]);
 
     useEffect(() => {
         if (dataChannelOpen && dataChannel) {
             if (webrtcTimeoutRef.current) clearTimeout(webrtcTimeoutRef.current);
             setPeerConnected(true);
             setStatus(CONNECTION_STATES.CONNECTED);
-            toast.success('PEER CONNECTED — SECURE TUNNEL ACTIVE');
+            if (!toastFiredRef.current.connected) {
+                toastFiredRef.current.connected = true;
+                toast.success('PEER CONNECTED — SECURE TUNNEL ACTIVE');
+            }
         }
-    }, [dataChannelOpen, dataChannel, toast]);
+    }, [dataChannelOpen, dataChannel]);
 
     useEffect(() => {
         if (connectionState === CONNECTION_STATES.DISCONNECTED && !peerConnected) {
@@ -174,19 +178,23 @@ export default function Send() {
         } else if (socket) {
             startSendingViaSocket(socket, file);
         }
-    }, [file, dataChannelOpen, dataChannel, socket, startSending, startSendingViaSocket, toast]);
+    }, [file, dataChannelOpen, dataChannel, socket, startSending, startSendingViaSocket]);
 
     useEffect(() => {
         if (transferState === CONNECTION_STATES.COMPLETED) {
             setStatus(CONNECTION_STATES.COMPLETED);
-            toast.success('FILE TRANSMITTED SUCCESSFULLY');
+            if (!toastFiredRef.current.complete) {
+                toastFiredRef.current.complete = true;
+                toast.success('FILE TRANSMITTED SUCCESSFULLY');
+            }
         }
-    }, [transferState, toast]);
+    }, [transferState]);
 
     const handleSendMore = () => {
         setFile(null);
         fileRef.current = null;
         hasStartedTransfer.current = false;
+        toastFiredRef.current.complete = false; // Reset for next transfer
         resetForNext();
         setStatus(CONNECTION_STATES.CONNECTED);
     };

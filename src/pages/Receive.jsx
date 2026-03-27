@@ -27,6 +27,7 @@ export default function Receive() {
     const webrtcTimeoutRef = useRef(null);
     const hasStartedReceiving = useRef(false);
     const prevReceivedCount = useRef(0);
+    const toastFiredRef = useRef({});
 
     const { socket, isConnected, emit, on } = useSocket();
     const {
@@ -63,7 +64,7 @@ export default function Receive() {
             toast.success(`RECEIVED: ${latest.fileName}`);
             prevReceivedCount.current = receivedFiles.length;
         }
-    }, [receivedFiles, toast]);
+    }, [receivedFiles]);
 
     const fallbackToRelay = useCallback(() => {
         if (hasStartedReceiving.current) return;
@@ -76,7 +77,7 @@ export default function Receive() {
         if (socket) {
             startReceivingViaSocket(socket);
         }
-    }, [socket, startReceivingViaSocket, toast]);
+    }, [socket, startReceivingViaSocket]);
 
     const handleJoinRoom = useCallback(async (code) => {
         setJoinLoading(true);
@@ -99,7 +100,7 @@ export default function Receive() {
         } finally {
             setJoinLoading(false);
         }
-    }, [emit, fallbackToRelay, toast]);
+    }, [emit, fallbackToRelay]);
 
     useEffect(() => {
         if (!socket) return;
@@ -126,7 +127,7 @@ export default function Receive() {
             cleanupDisconnect();
             if (webrtcTimeoutRef.current) clearTimeout(webrtcTimeoutRef.current);
         };
-    }, [socket, on, startAsReceiver, onIceCandidate, fallbackToRelay, toast]);
+    }, [socket, on, startAsReceiver, onIceCandidate, fallbackToRelay]);
 
     useEffect(() => {
         if (dataChannelOpen && dataChannel && !hasStartedReceiving.current) {
@@ -136,9 +137,12 @@ export default function Receive() {
             setPeerConnected(true);
             setStatus(CONNECTION_STATES.CONNECTED);
             startReceiving(dataChannel);
-            toast.success('SECURE TUNNEL ESTABLISHED');
+            if (!toastFiredRef.current.connected) {
+                toastFiredRef.current.connected = true;
+                toast.success('SECURE TUNNEL ESTABLISHED');
+            }
         }
-    }, [dataChannelOpen, dataChannel, startReceiving, toast]);
+    }, [dataChannelOpen, dataChannel, startReceiving]);
 
     useEffect(() => {
         if (transferState === CONNECTION_STATES.TRANSFERRING || transferState === CONNECTION_STATES.RELAY_TRANSFERRING) {
