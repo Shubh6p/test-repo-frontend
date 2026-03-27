@@ -348,6 +348,12 @@ export default function Send() {
                         >
                             ▸ SEND ANOTHER FILE
                         </button>
+                        <button
+                            onClick={handleAbort}
+                            className="w-full bg-retro-text text-white font-dos text-sm py-4 uppercase shadow-brutal transition-all duration-150 active:translate-y-1 active:translate-x-1 active:shadow-brutal-active hover:bg-black"
+                        >
+                            ▸ TERMINATE SESSION
+                        </button>
                     </div>
                 )}
 

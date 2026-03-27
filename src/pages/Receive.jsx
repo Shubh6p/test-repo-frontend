@@ -319,6 +319,12 @@ export default function Receive() {
                                 </p>
                             </div>
                         )}
+                        <button
+                            onClick={handleAbort}
+                            className="w-full mt-4 bg-retro-text text-white font-dos text-xs py-4 uppercase shadow-brutal transition-all duration-150 active:translate-y-1 active:translate-x-1 active:shadow-brutal-active hover:bg-black"
+                        >
+                            ▸ TERMINATE SESSION
+                        </button>
                     </div>
                 )}
 
